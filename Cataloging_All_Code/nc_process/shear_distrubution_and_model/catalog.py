@@ -21,7 +21,8 @@ if __name__ == "__main__":
         "c8_path": "/rstor/jmayhall/cataloging/nc_process/geojson_transform/completed_arrays/C08_scaled/*",
         "c13_scaled_path": "/rstor/jmayhall/cataloging/nc_process/geojson_transform/completed_arrays/C13_scaled/*",
         "c13_unscaled_path": "/rstor/jmayhall/cataloging/nc_process/geojson_transform/completed_arrays/C13_unscaled/*",
-        "dataframe_path": "/rstor/jmayhall/cataloging/hurdat_update_interp.txt"
+        "dataframe_path": "/rstor/jmayhall/cataloging/hurdat_update_interp.txt",
+        "plot": False
     }
 
     # Log start of process

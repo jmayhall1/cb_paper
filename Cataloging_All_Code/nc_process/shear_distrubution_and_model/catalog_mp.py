@@ -10,48 +10,77 @@ and save the resulting figures. Handles special case of AL032023/AL042023.
 """
 
 import datetime
+import gc
+import io
 import os
 from multiprocessing import Lock
 
 import matplotlib.pyplot as plt
 import numpy as np
+import tensorflow as tf
+import zstandard as zstd
 from keras.models import load_model
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 
-
 # -----------------------------
 # Model prediction helper
 # -----------------------------
-def model_prediction(model_path: str, x_test: np.ndarray, x_test8: np.ndarray) -> np.ndarray:
+model = None  # Global model object for multiprocessing
+
+
+def init_worker(model_path: str = '/rstor/jmayhall/Model_Training_Code/cnn_creation/model.keras'):
+    """
+    Initialize the Keras model ONCE per worker.
+    Uses spawn-safe initialization and prevents TF memory/thread leaks.
+    """
+
+    global model
+
+    # Clear any prior TF state (in case worker restarted via maxtasksperchild)
+    tf.keras.backend.clear_session()
+
+    # OPTIONAL: Restrict TF from grabbing all threads/CPU
+    tf.config.threading.set_intra_op_parallelism_threads(1)
+    tf.config.threading.set_inter_op_parallelism_threads(1)
+
+    # Load model with retry logic
+    for attempt in range(100):
+        try:
+            model = load_model(model_path, compile=False)
+            return
+        except Exception as e:
+            print(f"[Worker init] Model load attempt {attempt + 1}/100 failed: {e}")
+            model = None
+
+    # If still failed:
+    raise RuntimeError("Worker failed to load model after 100 attempts.")
+
+
+def model_prediction(x_test: np.ndarray, x_test8: np.ndarray) -> np.ndarray:
     """
     Load Keras model from disk and predict probability map for a given test input.
 
-    :param model_path: Path to the folder containing 'model.keras'.
     :param x_test: C13 test array.
     :param x_test8: C08 test array.
     :return: Probability array (height x width).
     """
-    model = load_model(os.path.join(model_path, 'model.keras'), compile=False)
     return model.predict([x_test[None, :], x_test8[None, :]])[0, :, :, 0]
 
 
 # -----------------------------
 # Plotting routine
 # -----------------------------
-def plotting(num, file, length, model_path, c8_files, c13_unscaled_files, latlon_files, prob_ticks, cutoff):
+def plotting(num, file, length, prob_ticks, cutoff, plot):
     """
     Main plotting routine for a single TC image.
 
     :param num: Index of the current file.
     :param file: Path to C13 scaled npz file.
     :param length: Total number of files.
-    :param model_path: Path to trained model.
-    :param c8_files: Dict of C08 scaled file paths.
-    :param c13_unscaled_files: Dict of C13 unscaled file paths.
-    :param latlon_files: Dict of lat/lon file paths.
     :param prob_ticks: List of probability ticks for colorbar.
     :param cutoff: Minimum probability cutoff for plotting.
+    :param plot: Bool to decide whether to plot.
     """
     print(f'Processing file {num + 1} of {length}')
     lock = Lock()
@@ -59,34 +88,56 @@ def plotting(num, file, length, model_path, c8_files, c13_unscaled_files, latlon
 
     # Extract metadata
     storm_id, date, time = filename[:8], filename[9:17], filename[18:22]
+    try:
+        # Load test arrays
+        x_test = np.load(file)["brightness"].astype(np.float32)
+        c8_file, c13_unscaled_file, latlon_file = (file[:-18].replace('C13', 'C08'),
+                                                   file[:-18].replace('scaled', 'unscaled'),
+                                                   file[:-18].replace('C13_scaled', 'latlon_arrs'))
+        x_test8 = np.load(f'{c8_file}C08_scaled_cut.npz')["brightness"].astype(np.float32)
+        lat = np.load(f'{latlon_file}latlon.npz')["lat"].astype(np.float32)
+        lon = np.load(f'{latlon_file}latlon.npz')["lon"].astype(np.float32)
 
-    # Handle special dual-storm case
-    storm_pairs = [(storm_id, file)]
-    if storm_id == 'AL032023' and date == '20230622' and time == '1200':
-        storm_pairs.append(('AL042023', file.replace('AL032023', 'AL042023')))
+        # Model prediction with retry
+        predict = None
+        while predict is None:
+            try:
+                predict = model_prediction(x_test, x_test8)
+            except Exception as e:
+                print(f'Model prediction error: {e}')
+                predict = None
 
-    for sid, file_path in storm_pairs:
-        try:
-            # Load test arrays
-            x_test = np.load(file_path)["brightness"].astype(np.float32)
-            x_test8 = np.load(c8_files.get(f'{file_path[:-18]}C08_scaled_cut.npz'))["brightness"].astype(np.float32)
-            x_unscaled = np.load(c13_unscaled_files.get(f'{file_path[:-18]}'
-                                                        f'C13_scaled_cut.npz'))["brightness"].astype(np.float32)
-            lat = np.load(latlon_files.get(f'{file_path[:-18]}latlon.npz'))["lat"].astype(np.float32)
-            lon = np.load(latlon_files.get(f'{file_path[:-18]}latlon.npz'))["lon"].astype(np.float32)
+        # Round floats
+        predict = predict.astype(np.float32).round(4)
+        lat = lat.astype(np.float32).round(4)
+        lon = lon.astype(np.float32).round(4)
 
-            # Model prediction with retry
+        # ---- Save to a temporary .npz in memory, not on disk ----
+        buffer = io.BytesIO()
+        np.savez(buffer, probability=predict, lat=lat, lon=lon)
+        raw_npz = buffer.getvalue()
+
+        # ---- Compress with zstd (no pickle!) ----
+        cctx = zstd.ZstdCompressor(level=22)
+
+        out_path = (
+            f'/rstor/jmayhall/cataloging/nc_process/shear_distrubution_and_model/tcb_probs/'
+            f'{storm_id}_{date}_{time}_probs.zst'
+        )
+
+        with open(out_path, 'wb') as f:
+            f.write(cctx.compress(raw_npz))
+
+        if plot:
             predict = None
             while predict is None:
                 try:
-                    predict = model_prediction(model_path, x_test, x_test8)
+                    predict = model_prediction(x_test, x_test8)
                 except Exception as e:
                     print(f'Model prediction error: {e}')
                     predict = None
-
-            # Mask probabilities below cutoff
+            x_unscaled = np.load(f'{c13_unscaled_file}C13_unscaled_cut.npz')["brightness"].astype(np.float32)
             predict[predict <= cutoff] = 0
-
             # Setup plot
             fig, ax = plt.subplots(1, 1, figsize=(16, 8))
             extent = [np.nanmin(lon), np.nanmax(lon), np.nanmin(lat), np.nanmax(lat)]
@@ -94,7 +145,7 @@ def plotting(num, file, length, model_path, c8_files, c13_unscaled_files, latlon
             ax.contour(np.flip(predict, axis=0), vmin=cutoff, vmax=1, cmap='rainbow', extent=extent)
 
             # Titles & axes
-            ax.set_title(f'TC {sid}', fontsize=16)
+            ax.set_title(f'TC {storm_id}', fontsize=16)
             ax.tick_params(axis='x', labelsize=16)
             ax.tick_params(axis='y', labelsize=16)
 
@@ -117,12 +168,16 @@ def plotting(num, file, length, model_path, c8_files, c13_unscaled_files, latlon
 
             # Save figure
             lock.acquire()
-            plt.savefig(f"model_prediction_{sid}.jpg", dpi=100)
+            plt.savefig(f"model_prediction_{storm_id}_{date}_{time}.jpg", dpi=100)
             plt.close()
             lock.release()
+        else:
+            del (predict, lat, lon, x_test, x_test8, c8_file, c13_unscaled_file,
+                 latlon_file, storm_id, date, time, filename)
+            gc.collect()
 
-        except EOFError:
-            print(f'EOFError encountered. File: {file_path}, Filename slice: {file_path[:-18]}')
+    except EOFError:
+        print(f'EOFError encountered. File: {file}, Filename slice: {file[:-18]}')
 
 
 # -----------------------------
