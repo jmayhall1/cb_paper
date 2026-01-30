@@ -133,15 +133,16 @@ def running(i: int, file: str, path_len: int, paths: dict, c8_scaled: pd.DataFra
             predict = None
 
     # Compute Local Solar Time and round to 3-hour bin
-    o = ephem.Observer()
     storm_time = pd.Timestamp(storm.index[0])
+    o = ephem.Observer()
     o.date = datetime(*storm_time.timetuple()[:6])
-    o.lon = np.deg2rad(center_lon)
-    solar_time_hours = solartime(o).tuple()[3] + solartime(o).tuple()[4] / 60
-    diurnal_time = np.round(solar_time_hours / 3) * 3
+    o.long = center_lon * np.pi / 180
+    solar_time = pd.Timestamp(str(solartime(o)))
+    # Round to nearest 3-hour diurnal bin
+    solar_time = solar_time.hour + solar_time.minute / 60
+    diurnal_time = np.round(solar_time)
     if diurnal_time == 24:
         diurnal_time = 0
-
     # Round wind to nearest 10 kt
     rounded_wind = 10 * float(np.round(wind / 10))
 

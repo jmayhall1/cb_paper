@@ -4,12 +4,16 @@ Last Edited: 10/02/2025
 @author: John Mark Mayhall
 Purpose: Identify transverse bands in TC quadrants based on shear vector.
 """
+import glob
 from collections import defaultdict
+from multiprocessing import Pool
 
+import matplotlib as mpl
 import matplotlib.patheffects as path_effects
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.cm import ScalarMappable
 from matplotlib.ticker import FuncFormatter
 from scipy.stats import mannwhitneyu
 from shear_multi import mp_running, init_worker
@@ -85,136 +89,219 @@ def adjacent_values(sorted_array: np.ndarray, q1: float, q3: float) -> tuple[flo
     return lower, upper
 
 
-def plot_violin(data: list[list[float]], labels: list[list[int]], title: str, xlabel: str,
-                ylabel: str, filename: str):
+def plot_violin_2panel(data1, labels1, data2, labels2, suptitle, xlabel, ylabel, filename):
     """
-    Plot a single violin plot.
-
-    :param data: Nested list of values
-    :param labels: Nested list of labels
-    :param title: Plot title
-    :param xlabel: X-axis label
-    :param ylabel: Y-axis label
-    :param filename: Output filename
+    Plot two side-by-side violin plots: violins + quartiles from 3-hour bins, hourly medians as a line.
     """
-    labels_flat = np.unique(np.concatenate([np.array(sublist) for sublist in labels]))
-    fig, ax = plt.subplots(figsize=(12, 8))
-    ax.tick_params(labelsize=16)
-    ax.set_ylim(0, 60)
 
-    # Width adjustment
-    widths = 2 if 'Diurnal' in title else 8
-    means_bool, medians_bool = False, False
-    parts = ax.violinplot(data, positions=labels_flat, showmeans=means_bool, showmedians=medians_bool,
-                          showextrema=False, widths=widths)
-    for pc in parts['bodies']:
-        pc.set_facecolor('#FFA500')
-        pc.set_edgecolor('black')
-        pc.set_alpha(1)
+    def plot_single_violin(ax: plt.axis, data: list, labels: list, panel_title: str):
+        # --- Bin data into 3-hour intervals ---
+        bin_centers = list(range(0, 24, 3))  # 0, 3, ..., 21
+        bins = defaultdict(list)
+        for group, label_group in zip(data, labels):
+            for val, hr in zip(group, label_group):
+                binned_hr = (3 * (hr // 3)) % 24  # ensures 24 → 0 bin
+                bins[binned_hr].append(val)
 
-    # Compute medians and whiskers
-    quartile1, medians, quartile3, whiskers_min, whiskers_max = [], [], [], [], []
-    for group in data:
-        group = np.sort(group)
-        q1, med, q3 = np.percentile(group, [25, 50, 75])
-        whisk_min, whisk_max = adjacent_values(group, q1, q3)
-        quartile1.append(q1)
-        medians.append(med)
-        quartile3.append(q3)
-        whiskers_min.append(whisk_min)
-        whiskers_max.append(whisk_max)
+        # --- Prepare violin data ---
+        violin_positions = np.array(sorted(bins.keys()), dtype=float)
+        violin_data = [np.asarray(bins[bc], dtype=float) for bc in violin_positions]
 
-    ax.scatter(labels_flat, medians, marker='o', color='blue', s=100, zorder=3)
-    ax.vlines(labels_flat, quartile1, quartile3, color='k', lw=5)
-    ax.vlines(labels_flat, whiskers_min, whiskers_max, color='k', lw=1)
+        # Compute quartiles and whiskers for each group manually
+        quartile1, medians, quartile3 = [], [], []
+        whiskers_min, whiskers_max = [], []
 
-    # Axis formatting
-    if 'Diurnal' in title:
-        ax.set_xlim(-2, 23)
-        ax.set_xticks(range(0, 22, 3))
-        num_list = range(0, 22, 3)
-        ax.set_xticklabels([str(item) for item in num_list], rotation=45, ha='right')
-    else:
-        ax.set_xlim(15, 165)
-        ax.set_xticks(range(20, 161, 10))
-        ax.xaxis.set_major_formatter(FuncFormatter(label_every_10))
-        plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
-        ax.axvline(65, color='orange', linestyle='--', lw=2, label='TS/HUR Transition')
-        ax.axvline(95, color='magenta', linestyle='--', lw=2, label='HUR/MAJ HUR Transition')
-        ax.legend(fontsize=12, loc='upper right').set_alpha(0.5)
+        for group in violin_data:
+            group = group[np.isfinite(group)]
 
-    # Annotate sample size
-    ymax = max([np.max(d) for d in data])
-    y_offset = 0.05 * ymax
-    for i, d in enumerate(data):
-        text_y = min(max(d) + y_offset, 100)
-        ax.text(labels_flat[i], text_y, str(len(d)), ha='center', fontsize=16,
-                fontweight='bold', rotation=90, va='center',
+            if group.size == 0:
+                quartile1.append(np.nan)
+                medians.append(np.nan)
+                quartile3.append(np.nan)
+                whiskers_min.append(np.nan)
+                whiskers_max.append(np.nan)
+                continue
+
+            q1, med, q3 = np.percentile(group, [25, 50, 75])
+            whisk_min, whisk_max = adjacent_values(group, q1, q3)
+
+            quartile1.append(float(q1))
+            medians.append(float(med))
+            quartile3.append(float(q3))
+            whiskers_min.append(float(whisk_min))
+            whiskers_max.append(float(whisk_max))
+
+        # --- Plot violins ---
+        ax.tick_params(axis='both', labelsize=14)
+        parts = ax.violinplot(
+            violin_data, positions=violin_positions, showmeans=False,
+            showmedians=False, showextrema=False, widths=2.5
+        )
+        for pc in parts['bodies']:
+            pc.set_facecolor('#FFA500')
+            pc.set_edgecolor('black')
+            pc.set_alpha(1)
+
+        ax.scatter(violin_positions, medians, color='blue', s=80, zorder=3)
+        ax.vlines(violin_positions, quartile1, quartile3, color='k', lw=2)
+        ax.vlines(violin_positions, whiskers_min, whiskers_max, color='k', lw=1)
+
+        # --- Formatting ---
+        ax.set_xlim((-2, 24))
+        ax.set_xticks(range(0, 24, 3))
+        ax.set_xticklabels(np.arange(0, 24, 3), rotation=45, ha='right')
+        ax.set_ylim((0, 60))
+        ax.set_title(panel_title, fontsize=16)
+        ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
+
+        # --- Sample counts ---
+        for pos, values in zip(violin_positions, violin_data):
+            if len(values) == 0:
+                continue
+            y = min(max(values) + 2, 60)
+            ax.text(
+                pos, y, f'{len(values)}', ha='center', fontsize=14, fontweight='bold',
+                rotation=90, va='center',
                 path_effects=[path_effects.Stroke(linewidth=2, foreground='white'),
-                              path_effects.Normal()])
+                              path_effects.Normal()]
+            )
 
-    ax.set_title(title, fontsize=20)
-    ax.set_xlabel(xlabel, fontsize=20)
-    ax.set_ylabel(ylabel, fontsize=20)
-    ax.grid(True, linestyle='--', linewidth=1.0, alpha=1)
+    # --- Create horizontal 2-panel plot ---
+    fig, axes = plt.subplots(1, 2, figsize=(16, 8))
+    plot_single_violin(axes[0], data1, labels1, 'Atlantic')
+    plot_single_violin(axes[1], data2, labels2, 'Eastern Pacific')
+
+    fig.suptitle(suptitle, fontsize=20)
+    fig.supxlabel(xlabel, fontsize=20)
+    fig.supylabel(ylabel, fontsize=20, x=0.05)
     plt.savefig(filename)
     plt.close()
 
 
-# ----------------------------
-# Mann-Whitney and contourf
-# ----------------------------
-def compute_pval_grid(data: list[list[float]]) -> np.ndarray:
-    """Compute pairwise Mann-Whitney p-values for a list of groups."""
-    n = len(data)
-    p_grid = np.empty((n, n))
-    mannwhitneyu_type = 'two-sided'
-    for i in range(n):
-        for j in range(n):
-            _, p = mannwhitneyu(data[i], data[j], alternative=mannwhitneyu_type)
-            p_grid[i, j] = p
-    return p_grid
-
-
-def plot_mann_whitney_contour(data: list[list[float]], labels: list[list[int]], filename: str,
-                              xlabel: str, ylabel: str, title: str, test_type='p'):
+def plot_contourf_2panel(data1: list, labels1: list, data2: list, labels2: list, suptitle: str, xlabel: str,
+                         ylabel: str, filename: str):
     """
-    Plot Mann-Whitney U test results as scatter of significant pairs (p < 0.05).
-
-    :param data: Nested list of groups
-    :param labels: Nested list of labels
-    :param filename: Output file
-    :param xlabel: X-axis label
-    :param ylabel: Y-axis label
-    :param title: Plot title
-    :param test_type: 'p' for p-value, 'u' for U statistic
+    Plot p-values after binning data into 3-hour intervals.
     """
-    unique_labels = sorted(set([item for sublist in labels for item in sublist]))
-    n = len(unique_labels)
-    grouped_data = {label[0]: d for label, d in zip(labels, data)}
-    mannwhitneyu_type = 'two-sided'
 
-    stat_matrix = np.zeros((n, n))
-    for i in range(n):
-        for j in range(n):
-            group1 = grouped_data[unique_labels[i]]
-            group2 = grouped_data[unique_labels[j]]
-            u_stat, p_value = mannwhitneyu(group1, group2, alternative=mannwhitneyu_type)
-            stat_matrix[i, j] = p_value if test_type == 'p' else u_stat
+    def bin_data_by_3hr(data: list, labels: list):
+        """
+        Bin data into 3-hourly bins centered on 0, 3, ..., 21.
+        The 24-hour bin wraps into 0.
+        """
+        bins = defaultdict(list)  # key: (x_bin, y_bin) => list of values
 
-    # Mask significant values
-    x, y = np.meshgrid(unique_labels, unique_labels)
-    mask = stat_matrix.ravel() < 0.05
+        for group, label_group in zip(data, labels):
+            for val, (x_hr, y_hr) in zip(group, zip(label_group, label_group)):
+                # Wrap 24 -> 0
+                x_bin = (int(x_hr) % 24) // 3 * 3
+                y_bin = (int(y_hr) % 24) // 3 * 3
+                bins[(x_bin, y_bin)].append(val)
 
-    fig, ax = plt.subplots(figsize=(12, 8))
-    ax.scatter(x.ravel()[mask], y.ravel()[mask], c='black', s=200, label='p < 0.05')
-    ax.set_xlabel(xlabel, fontsize=17)
-    ax.set_ylabel(ylabel, fontsize=17)
-    ax.set_title(title, fontsize=17)
-    ax.grid(True, linestyle='--', linewidth=1, alpha=1)
-    ax.legend(loc='upper right', fontsize=16)
+        bin_centers = list(range(0, 24, 3))
+        grid = [[bins.get((x, y), []) for x in bin_centers] for y in bin_centers]
+        return grid, bin_centers
+
+    # Bin and compute p-value grids
+    binned1, centers1 = bin_data_by_3hr(data1, labels1)
+    binned2, centers2 = bin_data_by_3hr(data2, labels2)
+
+    pvals1 = compute_pval_grid(binned1)
+    pvals2 = compute_pval_grid(binned2)
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 8))
+
+    # Common tick marks
+    tick_marks = range(0, 24, 3)
+
+    # Left panel (Atlantic)
+    x, y = np.meshgrid(centers1, centers1)
+    z = np.array(pvals1)
+    x_flat = x.ravel()
+    y_flat = y.ravel()
+    z_flat = z.ravel()
+    mask = z_flat < 0.05
+    x_masked = x_flat[mask]
+    y_masked = y_flat[mask]
+    axes[0].scatter(x_masked, y_masked, c='black', s=200, label='p < 0.05')
+    axes[0].set_xlim((-1, 24))
+    axes[0].set_ylim((-1, 24))
+    axes[0].set_xticks(tick_marks)
+    axes[0].set_yticks(tick_marks)
+    axes[0].set_xticklabels(tick_marks, rotation=45, ha='right')
+    axes[0].set_yticklabels(tick_marks)
+    axes[0].set_title('Atlantic', fontsize=16)
+    axes[0].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
+
+    # Right panel (Eastern Pacific)
+    x, y = np.meshgrid(centers2, centers2)
+    z = np.array(pvals2)
+    x_flat = x.ravel()
+    y_flat = y.ravel()
+    z_flat = z.ravel()
+    mask = z_flat < 0.05
+    x_masked = x_flat[mask]
+    y_masked = y_flat[mask]
+    axes[1].scatter(x_masked, y_masked, c='black', s=200, label='p < 0.05')
+    axes[1].set_xlim((-1, 24))
+    axes[1].set_ylim((-1, 24))
+    axes[1].set_xticks(tick_marks)
+    axes[1].set_yticks(tick_marks)
+    axes[1].set_xticklabels(tick_marks, rotation=45, ha='right')
+    axes[1].set_yticklabels(tick_marks)
+    axes[1].set_title('Eastern Pacific', fontsize=16)
+    axes[1].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
+
+    # Final layout
+    fig.subplots_adjust(bottom=0.25)
+    fig.suptitle(suptitle, fontsize=20, y=0.95)
+    fig.supxlabel(xlabel, fontsize=20, y=0.15)
+    fig.supylabel(ylabel, fontsize=20, x=0.05)
+
+    # Add legend
+    handles, labels = axes[0].get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=16)
     plt.savefig(filename)
     plt.close()
+
+
+def compute_pval_grid(grid: list[list[list[float]]]) -> np.ndarray:
+    """
+    Compute Mann-Whitney p-values for a 2D grid of lists-of-values.
+    Returns an np.array of shape (n_bins, n_bins).
+    """
+    n = len(grid)
+    pvals = np.full((n, n), np.nan)
+
+    for i in range(n):
+        for j in range(n):
+            data_i = grid[i]
+            data_j = grid[j]
+            # flatten row into single list of values
+            vals_i = [v for cell in data_i for v in (cell if isinstance(cell, list) else [cell])]
+            vals_j = [v for cell in data_j for v in (cell if isinstance(cell, list) else [cell])]
+
+            if vals_i and vals_j:  # both non-empty
+                _, p = mannwhitneyu(vals_i, vals_j, alternative='two-sided')
+                pvals[i, j] = p
+    return pvals
+
+
+def clean_func(list1: list, list2: list) -> list:
+    """
+    Function for removing None values from list
+    :param list1: First list to be cleaned
+    :param list2: Second list to be cleaned
+    :return: The two cleaned lists
+    """
+    none_indices = ([i for i, v in enumerate(list1) if v is None] +
+                    [i for i, v in enumerate(list2) if v is None])
+
+    # Remove None values
+    cleaned_list1 = [v for i, v in enumerate(list1) if i not in none_indices]
+    cleaned_list2 = [v for i, v in enumerate(list2) if i not in none_indices]
+    return cleaned_list1, cleaned_list2
 
 
 if __name__ == '__main__':
@@ -266,7 +353,7 @@ if __name__ == '__main__':
     }
 
     # Parallel processing
-    with Pool(12, initializer=init_worker) as pool:
+    with Pool(24, initializer=init_worker) as pool:
         for result in pool.map(mp_running, needed_args):
             if result is None:
                 continue
@@ -336,100 +423,163 @@ if __name__ == '__main__':
 
 
     # ================= Helper to plot past/future wind changes =================
-    def plot_wind_change(results: dict, hours: list, fname_prefix: str, title_prefix: str):
+    def plot_wind_change_8panel(results_al: dict,
+                                results_ep: dict,
+                                hours: list,
+                                title: str):
         """
-        Helper function for plotting wind change data.
-        :param results: Dictionary of results
-        :param hours: List of hours
-        :param fname_prefix: Filename prefix
-        :param title_prefix: Title prefix
+        8-panel violin plots of TCB occurrence vs TC intensity change.
+
+        Rows: lead time (6, 12, 18, 24 hours)
+        Columns: Basin (Atlantic | Eastern Pacific)
+
+        Includes Mann–Whitney U significance overlay (p < 0.05).
         """
-        ax = None
-        """Generic function for plotting wind change violin plots and p-values."""
-        data_list = [group_func(results['wind_change'][f'{h:+}']['pixel'],
-                                results['wind_change'][f'{h:+}']['count'])[0] for h in hours]
-        x_labels = [group_func(results['wind_change'][f'{h:+}']['pixel'],
-                               results['wind_change'][f'{h:+}']['count'])[1] for h in hours]
-        labels_list = [f"{h}hr" for h in hours]
 
-        # Violin plots
-        fig, axes = plt.subplots(2, 2, figsize=(12, 12))
-        fig.suptitle(f'{title_prefix} TCB Occurrences vs TC Intensity Change', fontsize=20)
-        fig.supxlabel(r'TC Wind Speed Change ($\frac{dv}{dt}, kts$)', fontsize=20)
-        fig.supylabel('Percentage of Pixels with TCBs', fontsize=20)
+        # ---------------- Figure-wide configuration ----------------
+        basins = {
+            'Atlantic': results_al,
+            'Eastern Pacific': results_ep
+        }
 
-        for ax, data, label, labels in zip(axes.flatten(), data_list, labels_list, x_labels):
-            labels = np.unique(np.concatenate([np.array(sublist) for sublist in labels]))
-            ax.tick_params(axis='both', labelsize=16)
-            parts = ax.violinplot(data, positions=labels, showmeans=False, showmedians=False, showextrema=False,
-                                  widths=8)
-            for pc in parts['bodies']:
-                pc.set_facecolor('#FFA500')
-                pc.set_edgecolor('black')
-                pc.set_alpha(1)
+        fname = (
+            'prev_intensity_change_ALEP.png'
+            if title == 'Previous'
+            else 'future_intensity_change_ALEP.png'
+        )
 
-            # Quartiles and whiskers
-            quartile1, medians, quartile3, whiskers_min, whiskers_max = [], [], [], [], []
-            for group in data:
-                group = np.sort(group)
-                q1, med, q3 = np.percentile(group, [25, 50, 75])
-                whisk_min, whisk_max = adjacent_values(group, q1, q3)
-                quartile1.append(q1)
-                medians.append(med)
-                quartile3.append(q3)
-                whiskers_min.append(whisk_min)
-                whiskers_max.append(whisk_max)
-            ax.scatter(labels, medians, marker='o', color='blue', s=100, zorder=3)
-            ax.vlines(labels, quartile1, quartile3, color='k', linestyle='-', lw=5)
-            ax.vlines(labels, whiskers_min, whiskers_max, color='k', linestyle='-', lw=1)
+        # Consistent x-axes PER FIGURE
+        if title == 'Future':
+            xlims = {
+                6: (-60, 40),
+                12: (-100, 60),
+                18: (-80, 80),
+                24: (-100, 100)
+            }
+            time_word = 'Next'
+        else:
+            xlims = {
+                6: (-40, 40),
+                12: (-60, 60),
+                18: (-80, 80),
+                24: (-100, 100)
+            }
+            time_word = 'Previous'
 
-            # Axis limits
-            ax.set_ylim((0, 60))
-            if '6' in label:
-                ax.set_xlim((-65, 45))
-                ax.set_xticks(range(-60, 41, 20))
-            elif '12' in label:
-                ax.set_xlim((-105, 65))
-                ax.set_xticks(range(-100, 61, 20))
-            elif '18' in label:
-                ax.set_xlim((-85, 85))
-                ax.set_xticks(range(-80, 81, 20))
-            elif '24' in label:
-                ax.set_xlim((-105, 105))
-                ax.set_xticks(range(-100, 101, 20))
-            ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
-            plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+        # ---------------- Create figure ----------------
+        fig, axes = plt.subplots(
+            nrows=len(hours),
+            ncols=2,
+            figsize=(14, 18)
+        )
 
-            # Add transition lines
-            ax.axvline(x=-20, color='blue', linestyle='--', lw=2, label='RW Transition')
-            ax.axvline(x=30, color='magenta', linestyle='--', lw=2, label='RI Transition')
-            ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
+        fig.suptitle(
+            f'TCB Occurrences vs {title} TC Intensity Change',
+            fontsize=22
+        )
+        fig.supxlabel(r'TC Wind Speed Change ($\frac{dv}{dt}$, kts)', fontsize=18)
+        fig.supylabel('Percentage of Pixels with TCBs', fontsize=18)
 
-        handles, labels_ = ax.get_legend_handles_labels()
-        legend = fig.legend(handles, labels_, loc='upper right', fontsize=16)
-        legend.set_alpha(0.4)
-        plt.savefig(f'{fname_prefix}_all.png')
-        plt.close()
+        # ---------------- Main plotting loop ----------------
+        for row, h in enumerate(hours):
+            for col, (basin_name, basin_results) in enumerate(basins.items()):
+                ax = axes[row, col]
 
-        # Mann-Whitney P-values
-        fig, axes = plt.subplots(2, 2, figsize=(12, 12))
-        fig.suptitle(f'{title_prefix} TC Intensity Change Mann-Whitney P-Values', fontsize=20)
-        for ax, data, label, labels in zip(axes.flatten(), data_list, labels_list, x_labels):
-            labels = np.unique(np.concatenate([np.array(sublist) for sublist in labels]))
-            p_grid = compute_pval_grid(data)
-            x, y = np.meshgrid(labels, labels)
-            mask = p_grid.ravel() < 0.05
-            ax.scatter(x.ravel()[mask], y.ravel()[mask], c='black', s=150, label='p < 0.05')
-            ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=14)
-            ax.set_yticklabels(labels, fontsize=14)
-            ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
-        plt.savefig(f'{fname_prefix}_mannwhitney_all.png')
+                # Group data
+                data, labels = group_func(
+                    basin_results['wind_change'][f'{h:+}']['pixel'],
+                    basin_results['wind_change'][f'{h:+}']['count']
+                )
+                labels = np.unique(np.concatenate([np.array(l) for l in labels]))
+
+                # ---------------- Violin plots ----------------
+                parts = ax.violinplot(
+                    data,
+                    positions=labels,
+                    showmeans=False,
+                    showmedians=False,
+                    showextrema=False,
+                    widths=8
+                )
+
+                for pc in parts['bodies']:
+                    pc.set_facecolor('#FFA500')
+                    pc.set_edgecolor('black')
+                    pc.set_alpha(1)
+
+                # Quartiles and whiskers
+                q1, med, q3, wmin, wmax = [], [], [], [], []
+                for g in data:
+                    g = np.sort(g)
+                    a, b, c = np.percentile(g, [25, 50, 75])
+                    lo, hi = adjacent_values(g, a, c)
+                    q1.append(a)
+                    med.append(b)
+                    q3.append(c)
+                    wmin.append(lo)
+                    wmax.append(hi)
+
+                ax.scatter(labels, med, color='blue', s=80, zorder=3)
+                ax.vlines(labels, q1, q3, color='k', lw=4)
+                ax.vlines(labels, wmin, wmax, color='k', lw=1)
+
+                # ---------------- Mann–Whitney U overlay ----------------
+                p_grid = compute_pval_grid(data)
+                x, y = np.meshgrid(labels, labels)
+                mask = p_grid.ravel() < 0.05
+
+                ax.scatter(
+                    x.ravel()[mask],
+                    y.ravel()[mask],
+                    c='black',
+                    s=120,
+                    marker='x',
+                    label='MWU p < 0.05'
+                )
+
+                # ---------------- Axis formatting ----------------
+                ax.set_ylim(0, 60)
+                ax.set_xlim(xlims[abs(h)])
+                ax.set_xticks(
+                    np.arange(xlims[abs(h)][0], xlims[abs(h)][1] + 1, 20)
+                )
+                ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
+                ax.tick_params(labelsize=14)
+                ax.grid(True, linestyle='--', linewidth=1)
+
+                # Transition lines
+                ax.axvline(-20, color='blue', linestyle='--', lw=2)
+                ax.axvline(30, color='magenta', linestyle='--', lw=2)
+
+                # ---------------- Subplot title ----------------
+                ax.set_title(
+                    f'Intensity Change over the {time_word} {abs(h)} Hours ({basin_name})',
+                    fontsize=14
+                )
+
+        # ---------------- Global legend ----------------
+        handles, labels_ = axes[0, 0].get_legend_handles_labels()
+        fig.legend(handles, labels_, loc='upper right', fontsize=14).set_alpha(0.4)
+
+        plt.tight_layout(rect=[0, 0, 1, 0.96])
+        plt.savefig(fname)
         plt.close()
 
 
     # ==================== Run Wind Change Plots =====================
-    plot_wind_change(results, [-24, -18, -12, -6], 'prev_intensity_change', 'Previous')
-    plot_wind_change(results, [6, 12, 18, 24], 'future_intensity_change', 'Future')
+    # plot_wind_change_8panel(
+    #     results_al,
+    #     results_ep,
+    #     hours=[6, 12, 18, 24],
+    #     title='Future'
+    # )
+    #
+    # plot_wind_change_8panel(
+    #     results_al,
+    #     results_ep,
+    #     hours=[-24, -18, -12, -6],
+    #     title='Previous'
+    # )
 
     # ==================== Violin & Contour Plots for Basins =====================
     data_al, labels_al = group_func(results_al['diurnal_pixel'], results_al['diurnal_count'])
