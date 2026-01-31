@@ -77,6 +77,12 @@ def clean_func(list1: list, list2: list) -> tuple[list, list]:
     valid_indices = [i for i, (v1, v2) in enumerate(zip(list1, list2)) if v1 is not None and v2 is not None]
     return [list1[i] for i in valid_indices], [list2[i] for i in valid_indices]
 
+def fig_to_rgb(fig):
+    fig.canvas.draw()
+    w, h = fig.canvas.get_width_height()
+    buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+    return buf.reshape(h, w, 3)
+
 
 # ----------------------------
 # Violin/Box plot helpers
@@ -175,7 +181,7 @@ def plot_violin_2panel(data1, labels1, data2, labels2, suptitle, xlabel, ylabel,
     fig.supxlabel(xlabel, fontsize=20)
     fig.supylabel(ylabel, fontsize=20, x=0.05)
     plt.savefig(filename)
-    plt.close()
+    return fig, axes
 
 
 def plot_contourf_2panel(data1: list, labels1: list, data2: list, labels2: list, suptitle: str, xlabel: str,
@@ -263,7 +269,7 @@ def plot_contourf_2panel(data1: list, labels1: list, data2: list, labels2: list,
     by_label = dict(zip(labels, handles))
     fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=16)
     plt.savefig(filename)
-    plt.close()
+    return fig, axes
 
 
 def compute_pval_grid(grid: list[list[list[float]]]) -> np.ndarray:
@@ -584,26 +590,52 @@ if __name__ == '__main__':
     # ==================== Violin & Contour Plots for Basins =====================
     data_al, labels_al = group_func(results_al['diurnal_pixel'], results_al['diurnal_count'])
     data_ep, labels_ep = group_func(results_ep['diurnal_pixel'], results_ep['diurnal_count'])
-    plot_violin_2panel(data_al, labels_al, data_ep, labels_ep,
+    fig1, _ = plot_violin_2panel(data_al, labels_al, data_ep, labels_ep,
                        suptitle='TCB Occurrences vs Diurnal Cycle Stage',
                        xlabel='Local Solar Time',
                        ylabel='Percentage of Storm Pixels with TCBs',
                        filename='diurnal_violin_ALEP.png')
-    plot_contourf_2panel(data_al, labels_al, data_ep, labels_ep,
+    fig2, _ = plot_contourf_2panel(data_al, labels_al, data_ep, labels_ep,
                          suptitle='Diurnal Cycle Mann-Whitney P-Values',
                          xlabel='Local Solar Time',
                          ylabel='Local Solar Time',
                          filename='diurnal_mannwhitney_ALEP.png')
 
+    img1 = fig_to_rgb(fig1)
+    img2 = fig_to_rgb(fig2)
+
+    fig, ax = plt.subplots(
+        figsize=(img1.shape[1] / 100, (img1.shape[0] + img2.shape[0]) / 100)
+    )
+
+    ax.imshow(np.vstack([img1, img2]))
+    ax.axis("off")
+
+    plt.savefig("diurnal_combined.png", dpi=300, bbox_inches="tight")
+    plt.close('all')
+
     data_al, labels_al = group_func(results_al['intensity_pixel'], results_al['intensity_count'])
     data_ep, labels_ep = group_func(results_ep['intensity_pixel'], results_ep['intensity_count'])
-    plot_violin_2panel(data_al, labels_al, data_ep, labels_ep,
+    fig1, _ = plot_violin_2panel(data_al, labels_al, data_ep, labels_ep,
                        suptitle='TCB Occurrences vs TC Intensity',
                        xlabel='TC Current Wind Speed (kts)',
                        ylabel='Percentage of Storm Pixels with TCBs',
                        filename='intensity_violin_ALEP.png')
-    plot_contourf_2panel(data_al, labels_al, data_ep, labels_ep,
+    fig2, _ = plot_contourf_2panel(data_al, labels_al, data_ep, labels_ep,
                          suptitle='TC Intensity Mann-Whitney P-Values',
                          xlabel='Intensity (kts)',
                          ylabel='Intensity (kts)',
                          filename='intensity_mannwhitney_ALEP.png')
+
+    img1 = fig_to_rgb(fig1)
+    img2 = fig_to_rgb(fig2)
+
+    fig, ax = plt.subplots(
+        figsize=(img1.shape[1] / 100, (img1.shape[0] + img2.shape[0]) / 100)
+    )
+
+    ax.imshow(np.vstack([img1, img2]))
+    ax.axis("off")
+
+    plt.savefig("intensity_combined.png", dpi=300, bbox_inches="tight")
+    plt.close()

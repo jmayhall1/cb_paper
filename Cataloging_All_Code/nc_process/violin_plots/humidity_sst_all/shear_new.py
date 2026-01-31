@@ -67,6 +67,12 @@ def compute_pval_grid(data: list):
             p_grid[i, j] = p
     return p_grid
 
+def fig_to_rgb(fig):
+    fig.canvas.draw()
+    w, h = fig.canvas.get_width_height()
+    buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+    return buf.reshape(h, w, 3)
+
 
 # ---------------- Plotting Functions ---------------- #
 def plot_violin_2panel(data1, labels1, data2, labels2, suptitle, xlabel, ylabel, filename):
@@ -155,7 +161,7 @@ def plot_violin_2panel(data1, labels1, data2, labels2, suptitle, xlabel, ylabel,
     fig.supxlabel(xlabel, fontsize=20)
     fig.supylabel(ylabel, fontsize=20, x=0.05)
     plt.savefig(filename)
-    plt.close()
+    return fig, axes
 
 
 def plot_contourf_2panel(data1: list, labels1: list, data2: list, labels2: list, suptitle: str, xlabel: str,
@@ -243,7 +249,7 @@ def plot_contourf_2panel(data1: list, labels1: list, data2: list, labels2: list,
     by_label = dict(zip(labels, handles))
     fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=16)
     plt.savefig(filename)
-    plt.close()
+    return fig, axes
 
 
 def plot_rh_violin_ax(ax, data, labels, title):
@@ -326,7 +332,7 @@ def plot_rh_violin_ax(ax, data, labels, title):
 def compute_pval_grid(grid: list[list[list[float]]]) -> np.ndarray:
     """
     Compute Mann-Whitney p-values for a 2D grid of lists-of-values.
-    Returns an np.array of shape (n_bins, n_bins).
+    Returns a np.array of shape (n_bins, n_bins).
     """
     n = len(grid)
     pvals = np.full((n, n), np.nan)
@@ -428,16 +434,29 @@ if __name__ == '__main__':
     # ------------------ Plot SST ------------------ #
     data_AL, labels_AL = group_func(results_AL['sst_pixel'], results_AL['sst_count'])
     data_EP, labels_EP = group_func(results_EP['sst_pixel'], results_EP['sst_count'])
-    plot_violin_2panel(data_AL, labels_AL, data_EP, labels_EP,
+    fig1, _ = plot_violin_2panel(data_AL, labels_AL, data_EP, labels_EP,
                        suptitle='TCB Occurrences vs SST',
                        xlabel='SST (C)',
                        ylabel='Percentage of Storm Pixels with TCBs',
                        filename='sst_violin_ALEP.png')
-    plot_contourf_2panel(data_AL, labels_AL, data_EP, labels_EP,
+    fig2, _ = plot_contourf_2panel(data_AL, labels_AL, data_EP, labels_EP,
                          suptitle='SST Mann-Whitney P-Values',
                          xlabel='SST (C)',
                          ylabel='SST (C)',
                          filename='sst_mannwhitney_ALEP.png')
+
+    img1 = fig_to_rgb(fig1)
+    img2 = fig_to_rgb(fig2)
+
+    fig, ax = plt.subplots(
+        figsize=(img1.shape[1] / 100, (img1.shape[0] + img2.shape[0]) / 100)
+    )
+
+    ax.imshow(np.vstack([img1, img2]))
+    ax.axis("off")
+
+    plt.savefig("sst_combined.png", dpi=300, bbox_inches="tight")
+    plt.close('all')
 
     # ------------------ Plot RH ------------------ #
     rh_ids = ['lo', 'md', 'hi']
