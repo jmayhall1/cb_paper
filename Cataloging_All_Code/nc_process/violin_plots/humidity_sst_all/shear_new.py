@@ -117,10 +117,10 @@ def plot_violin_2panel(data1, labels1, data2, labels2, suptitle, xlabel, ylabel,
             whiskers_max.append(float(whisk_max))
 
         # --- Plot violins ---
-        ax.tick_params(axis='both', labelsize=14)
+        ax.tick_params(axis='both', labelsize=18)
         parts = ax.violinplot(
             violin_data, positions=violin_positions, showmeans=False,
-            showmedians=False, showextrema=False, widths=0.5
+            showmedians=False, showextrema=False, widths=0.6
         )
         for pc in parts['bodies']:
             pc.set_facecolor('#FFA500')
@@ -128,16 +128,16 @@ def plot_violin_2panel(data1, labels1, data2, labels2, suptitle, xlabel, ylabel,
             pc.set_alpha(1)
 
         ax.scatter(violin_positions, medians, color='blue', s=80, zorder=3)
-        ax.vlines(violin_positions, quartile1, quartile3, color='k', lw=2)
-        ax.vlines(violin_positions, whiskers_min, whiskers_max, color='k', lw=1)
+        ax.vlines(violin_positions, quartile1, quartile3, color='k', lw=5)
+        ax.vlines(violin_positions, whiskers_min, whiskers_max, color='k', lw=2)
 
         # --- Formatting ---
         ax.set_xlim((17, 33))
         ax.set_xticks(range(18, 33, 1))
         ax.set_xticklabels(np.arange(18, 33, 1), rotation=45, ha='right')
         ax.set_ylim((0, 60))
-        ax.set_title(panel_title, fontsize=16)
-        ax.tick_params(axis='both', labelsize=14)
+        ax.set_title(panel_title, fontsize=28)
+        ax.tick_params(axis='both', labelsize=18)
         ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
 
         # --- Sample counts ---
@@ -146,7 +146,7 @@ def plot_violin_2panel(data1, labels1, data2, labels2, suptitle, xlabel, ylabel,
                 continue
             y = min(max(values) + 2, 60)
             ax.text(
-                pos, y, f'{len(values)}', ha='center', fontsize=14, fontweight='bold',
+                pos, y, f'{len(values)}', ha='center', fontsize=20, fontweight='bold',
                 rotation=90, va='center',
                 path_effects=[path_effects.Stroke(linewidth=2, foreground='white'),
                               path_effects.Normal()]
@@ -157,9 +157,9 @@ def plot_violin_2panel(data1, labels1, data2, labels2, suptitle, xlabel, ylabel,
     plot_single_violin(axes[0], data1, labels1, 'Atlantic')
     plot_single_violin(axes[1], data2, labels2, 'Eastern Pacific')
 
-    fig.suptitle(suptitle, fontsize=20)
-    fig.supxlabel(xlabel, fontsize=20)
-    fig.supylabel(ylabel, fontsize=20, x=0.05)
+    fig.suptitle(suptitle, fontsize=28)
+    fig.supxlabel(xlabel, fontsize=28)
+    fig.supylabel(ylabel, fontsize=28, x=0.05)
     plt.savefig(filename)
     return fig, axes
 
@@ -214,8 +214,8 @@ def plot_contourf_2panel(data1: list, labels1: list, data2: list, labels2: list,
     axes[0].set_yticks(tick_marks)
     axes[0].set_xticklabels(tick_marks, rotation=45, ha='right')
     axes[0].set_yticklabels(tick_marks)
-    axes[0].tick_params(axis='both', labelsize=14)
-    axes[0].set_title('Atlantic', fontsize=16)
+    axes[0].tick_params(axis='both', labelsize=18)
+    axes[0].set_title('Atlantic', fontsize=28)
     axes[0].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
 
     # Right panel (Eastern Pacific)
@@ -234,20 +234,20 @@ def plot_contourf_2panel(data1: list, labels1: list, data2: list, labels2: list,
     axes[1].set_yticks(tick_marks)
     axes[1].set_xticklabels(tick_marks, rotation=45, ha='right')
     axes[1].set_yticklabels(tick_marks)
-    axes[1].tick_params(axis='both', labelsize=14)
-    axes[1].set_title('Eastern Pacific', fontsize=16)
+    axes[1].tick_params(axis='both', labelsize=18)
+    axes[1].set_title('Eastern Pacific', fontsize=28)
     axes[1].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
 
     # Final layout
     fig.subplots_adjust(bottom=0.25)
-    fig.suptitle(suptitle, fontsize=20, y=0.95)
-    fig.supxlabel(xlabel, fontsize=20, y=0.15)
-    fig.supylabel(ylabel, fontsize=20, x=0.05)
+    fig.suptitle(suptitle, fontsize=28, y=0.98)
+    fig.supxlabel(xlabel, fontsize=28, y=0.13)
+    fig.supylabel(ylabel, fontsize=28, x=0.05)
 
     # Add legend
     handles, labels = axes[0].get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
-    fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=16)
+    fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=20, framealpha=0)
     plt.savefig(filename, dpi=300, bbox_inches="tight")
     return fig, axes
 
@@ -289,7 +289,7 @@ def plot_rh_violin_ax(ax, data, labels, title, rh_lims):
 
     parts = ax.violinplot(
         violin_data, positions=violin_positions,
-        showmeans=False, showmedians=False, showextrema=False, widths=2.5
+        showmeans=False, showmedians=False, showextrema=False, widths=6
     )
 
     for pc in parts['bodies']:
@@ -298,9 +298,9 @@ def plot_rh_violin_ax(ax, data, labels, title, rh_lims):
         pc.set_alpha(1)
 
     ax.scatter(violin_positions, medians, color='blue', s=80, zorder=3)
-    ax.vlines(violin_positions, quartile1, quartile3, color='k', lw=2)
-    ax.vlines(violin_positions, whiskers_min, whiskers_max, color='k', lw=1)
-    ax.tick_params(axis='both', labelsize=14)
+    ax.vlines(violin_positions, quartile1, quartile3, color='k', lw=10)
+    ax.vlines(violin_positions, whiskers_min, whiskers_max, color='k', lw=4)
+    ax.tick_params(axis='both', labelsize=18)
 
     # --- Sample size labels ---
     for pos, values in zip(violin_positions, violin_data):
@@ -313,7 +313,7 @@ def plot_rh_violin_ax(ax, data, labels, title, rh_lims):
             pos, y, f'{len(values)}',
             ha='center',
             va='center',
-            fontsize=14,
+            fontsize=20,
             fontweight='bold',
             rotation=90,
             path_effects=[
@@ -327,7 +327,7 @@ def plot_rh_violin_ax(ax, data, labels, title, rh_lims):
     ax.set_xticks(range(start, end, step))
     ax.set_ylim((0, 60))
     ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
-    ax.set_title(title, fontsize=18)
+    ax.set_title(title, fontsize=24)
 
 
 def compute_pval_grid(grid: list[list[list[float]]]) -> np.ndarray:
@@ -486,9 +486,9 @@ if __name__ == '__main__':
             rh_lims[col]
         )
 
-    fig.suptitle('TCB Occurrences vs RH', fontsize=26)
-    fig.supxlabel('RH (%)', fontsize=24)
-    fig.supylabel('Percentage of Storm Pixels with TCBs', fontsize=24)
+    fig.suptitle('TCB Occurrences vs RH', fontsize=28)
+    fig.supxlabel('RH (%)', fontsize=28)
+    fig.supylabel('Percentage of Storm Pixels with TCBs', fontsize=28)
 
     plt.savefig('rh_ALEP.png', dpi=300, bbox_inches="tight")
     plt.close()
@@ -506,18 +506,18 @@ if __name__ == '__main__':
 
             mask = pvals < 0.05
             axes[row, col].scatter(X[mask], Y[mask], c='black', s=200, label='p < 0.05')
-            axes[row, col].set_title(f'{basin}: {rh_titles[col]}', fontsize=18)
+            axes[row, col].set_title(f'{basin}: {rh_titles[col]}', fontsize=24)
             axes[row, col].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
             axes[row, col].set_xlim(rh_lims[col][0] - 5, rh_lims[col][1] + 4)
             axes[row, col].set_ylim(rh_lims[col][0] - 5, rh_lims[col][1] + 4)
-            axes[row, col].tick_params(axis='both', labelsize=14)
+            axes[row, col].tick_params(axis='both', labelsize=18)
 
-    fig.suptitle('RH Mann–Whitney P-Values', fontsize=26)
-    fig.supxlabel('RH (%)', fontsize=24)
-    fig.supylabel('RH (%)', fontsize=24)
+    fig.suptitle('RH Mann–Whitney P-Values', fontsize=28)
+    fig.supxlabel('RH (%)', fontsize=28)
+    fig.supylabel('RH (%)', fontsize=28)
     handles, labels = axes[0, 0].get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
-    fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=16)
+    fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=28, framealpha=0)
 
     plt.savefig('rh_ALEP_mannwhitney.png', dpi=300, bbox_inches="tight")
     plt.close()

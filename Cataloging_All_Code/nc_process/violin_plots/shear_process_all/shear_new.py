@@ -138,10 +138,10 @@ def plot_violin_2panel_diurnal(data1, labels1, data2, labels2, suptitle, xlabel,
             whiskers_max.append(float(whisk_max))
 
         # --- Plot violins ---
-        ax.tick_params(axis='both', labelsize=14)
+        ax.tick_params(axis='both', labelsize=18)
         parts = ax.violinplot(
             violin_data, positions=violin_positions, showmeans=False,
-            showmedians=False, showextrema=False, widths=2.5
+            showmedians=False, showextrema=False, widths=2
         )
         for pc in parts['bodies']:
             pc.set_facecolor('#FFA500')
@@ -149,15 +149,15 @@ def plot_violin_2panel_diurnal(data1, labels1, data2, labels2, suptitle, xlabel,
             pc.set_alpha(1)
 
         ax.scatter(violin_positions, medians, color='blue', s=80, zorder=3)
-        ax.vlines(violin_positions, quartile1, quartile3, color='k', lw=2)
-        ax.vlines(violin_positions, whiskers_min, whiskers_max, color='k', lw=1)
+        ax.vlines(violin_positions, quartile1, quartile3, color='k', lw=10)
+        ax.vlines(violin_positions, whiskers_min, whiskers_max, color='k', lw=5)
 
         # --- Formatting ---
         ax.set_xlim((-2, 24))
         ax.set_xticks(range(0, 24, 3))
         ax.set_xticklabels(np.arange(0, 24, 3), rotation=45, ha='right')
         ax.set_ylim((0, 60))
-        ax.set_title(panel_title, fontsize=16)
+        ax.set_title(panel_title, fontsize=28)
         ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
 
         # --- Sample counts ---
@@ -166,7 +166,7 @@ def plot_violin_2panel_diurnal(data1, labels1, data2, labels2, suptitle, xlabel,
                 continue
             y = min(max(values) + 2, 60)
             ax.text(
-                pos, y, f'{len(values)}', ha='center', fontsize=14, fontweight='bold',
+                pos, y, f'{len(values)}', ha='center', fontsize=18, fontweight='bold',
                 rotation=90, va='center',
                 path_effects=[path_effects.Stroke(linewidth=2, foreground='white'),
                               path_effects.Normal()]
@@ -177,9 +177,9 @@ def plot_violin_2panel_diurnal(data1, labels1, data2, labels2, suptitle, xlabel,
     plot_single_violin(axes[0], data1, labels1, 'Atlantic')
     plot_single_violin(axes[1], data2, labels2, 'Eastern Pacific')
 
-    fig.suptitle(suptitle, fontsize=20)
-    fig.supxlabel(xlabel, fontsize=20)
-    fig.supylabel(ylabel, fontsize=20, x=0.05)
+    fig.suptitle(suptitle, fontsize=28)
+    fig.supxlabel(xlabel, fontsize=28)
+    fig.supylabel(ylabel, fontsize=28, x=0.05)
     plt.savefig(filename)
     return fig, axes
 
@@ -236,8 +236,9 @@ def plot_contourf_2panel_diurnal(data1: list, labels1: list, data2: list, labels
     axes[0].set_yticks(tick_marks)
     axes[0].set_xticklabels(tick_marks, rotation=45, ha='right')
     axes[0].set_yticklabels(tick_marks)
-    axes[0].set_title('Atlantic', fontsize=16)
+    axes[0].set_title('Atlantic', fontsize=28)
     axes[0].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
+    axes[0].tick_params(axis='both', labelsize=18)
 
     # Right panel (Eastern Pacific)
     x, y = np.meshgrid(centers2, centers2)
@@ -255,19 +256,20 @@ def plot_contourf_2panel_diurnal(data1: list, labels1: list, data2: list, labels
     axes[1].set_yticks(tick_marks)
     axes[1].set_xticklabels(tick_marks, rotation=45, ha='right')
     axes[1].set_yticklabels(tick_marks)
-    axes[1].set_title('Eastern Pacific', fontsize=16)
+    axes[1].set_title('Eastern Pacific', fontsize=28)
     axes[1].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
+    axes[1].tick_params(axis='both', labelsize=18)
 
     # Final layout
     fig.subplots_adjust(bottom=0.25)
-    fig.suptitle(suptitle, fontsize=20, y=0.95)
-    fig.supxlabel(xlabel, fontsize=20, y=0.15)
-    fig.supylabel(ylabel, fontsize=20, x=0.05)
+    fig.suptitle(suptitle, fontsize=28, y=0.98)
+    fig.supxlabel(xlabel, fontsize=28, y=0.13)
+    fig.supylabel(ylabel, fontsize=28, x=0.05)
 
     # Add legend
     handles, labels = axes[0].get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
-    fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=16)
+    fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=20, framealpha=0)
     plt.savefig(filename)
     return fig, axes
 
@@ -314,10 +316,10 @@ def plot_violin_2panel_intensity(data1, labels1, data2, labels2, suptitle, xlabe
             whiskers_max.append(float(whisk_max))
 
         # --- Plot violins ---
-        ax.tick_params(axis='both', labelsize=14)
+        ax.tick_params(axis='both', labelsize=18)
         parts = ax.violinplot(
             violin_data, positions=violin_positions, showmeans=False,
-            showmedians=False, showextrema=False, widths=2.5
+            showmedians=False, showextrema=False, widths=5
         )
         for pc in parts['bodies']:
             pc.set_facecolor('#FFA500')
@@ -325,15 +327,15 @@ def plot_violin_2panel_intensity(data1, labels1, data2, labels2, suptitle, xlabe
             pc.set_alpha(1)
 
         ax.scatter(violin_positions, medians, color='blue', s=80, zorder=3)
-        ax.vlines(violin_positions, quartile1, quartile3, color='k', lw=2)
-        ax.vlines(violin_positions, whiskers_min, whiskers_max, color='k', lw=1)
+        ax.vlines(violin_positions, quartile1, quartile3, color='k', lw=5)
+        ax.vlines(violin_positions, whiskers_min, whiskers_max, color='k', lw=2)
 
         # --- Formatting ---
         ax.set_xlim((15, 165))
         ax.set_xticks(range(20, 161, 10))
         ax.set_xticklabels(np.arange(20, 161, 10), rotation=45, ha='right')
         ax.set_ylim((0, 60))
-        ax.set_title(panel_title, fontsize=16)
+        ax.set_title(panel_title, fontsize=28)
         ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
 
         # --- Sample counts ---
@@ -342,7 +344,7 @@ def plot_violin_2panel_intensity(data1, labels1, data2, labels2, suptitle, xlabe
                 continue
             y = min(max(values) + 2, 60)
             ax.text(
-                pos, y, f'{len(values)}', ha='center', fontsize=14, fontweight='bold',
+                pos, y, f'{len(values)}', ha='center', fontsize=18, fontweight='bold',
                 rotation=90, va='center',
                 path_effects=[path_effects.Stroke(linewidth=2, foreground='white'),
                               path_effects.Normal()]
@@ -353,9 +355,9 @@ def plot_violin_2panel_intensity(data1, labels1, data2, labels2, suptitle, xlabe
     plot_single_violin(axes[0], data1, labels1, 'Atlantic')
     plot_single_violin(axes[1], data2, labels2, 'Eastern Pacific')
 
-    fig.suptitle(suptitle, fontsize=20)
-    fig.supxlabel(xlabel, fontsize=20)
-    fig.supylabel(ylabel, fontsize=20, x=0.05)
+    fig.suptitle(suptitle, fontsize=28, y=0.98)
+    fig.supxlabel(xlabel, fontsize=25, y=0)
+    fig.supylabel(ylabel, fontsize=25, x=0.05)
     plt.savefig(filename)
     return fig, axes
 
@@ -375,8 +377,8 @@ def plot_contourf_2panel_intensity(data1: list, labels1: list, data2: list, labe
 
         for group, label_group in zip(data, labels):
             for val, (x_lab, y_lab) in zip(group, zip(label_group, label_group)):
-                x_bin = int(x_hr) // 10 * 10
-                y_bin = int(y_hr)// 10 * 10
+                x_bin = int(x_lab) // 10 * 10
+                y_bin = int(y_lab)// 10 * 10
                 bins[(x_bin, y_bin)].append(val)
 
         bin_centers = list(range(20, 161, 10))
@@ -411,8 +413,9 @@ def plot_contourf_2panel_intensity(data1: list, labels1: list, data2: list, labe
     axes[0].set_yticks(tick_marks)
     axes[0].set_xticklabels(tick_marks, rotation=45, ha='right')
     axes[0].set_yticklabels(tick_marks)
-    axes[0].set_title('Atlantic', fontsize=16)
+    axes[0].set_title('Atlantic', fontsize=28)
     axes[0].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
+    axes[0].tick_params(axis='both', labelsize=18)
 
     # Right panel (Eastern Pacific)
     x, y = np.meshgrid(centers2, centers2)
@@ -430,19 +433,20 @@ def plot_contourf_2panel_intensity(data1: list, labels1: list, data2: list, labe
     axes[1].set_yticks(tick_marks)
     axes[1].set_xticklabels(tick_marks, rotation=45, ha='right')
     axes[1].set_yticklabels(tick_marks)
-    axes[1].set_title('Eastern Pacific', fontsize=16)
+    axes[1].set_title('Eastern Pacific', fontsize=28)
     axes[1].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
+    axes[1].tick_params(axis='both', labelsize=18)
 
     # Final layout
     fig.subplots_adjust(bottom=0.25)
-    fig.suptitle(suptitle, fontsize=20, y=0.95)
-    fig.supxlabel(xlabel, fontsize=20, y=0.15)
-    fig.supylabel(ylabel, fontsize=20, x=0.05)
+    fig.suptitle(suptitle, fontsize=28, y=0.98)
+    fig.supxlabel(xlabel, fontsize=28, y=0.13)
+    fig.supylabel(ylabel, fontsize=28, x=0.05)
 
     # Add legend
     handles, labels = axes[0].get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
-    fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=16)
+    fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=20, framealpha=0)
     plt.savefig(filename)
     return fig, axes
 
@@ -490,23 +494,15 @@ def split_basin(results: dict):
     :param results: Analysis results
     :return: Split Results
     """
-    results_al = {k: [] if k != 'wind_change' else {f'{h:+}': {'pixel': [], 'count': []} for h in
-                                                    [-24, -18, -12, -6, 6, 12, 18, 24]} for k in results}
-    results_ep = {k: [] if k != 'wind_change' else {f'{h:+}': {'pixel': [], 'count': []} for h in
-                                                    [-24, -18, -12, -6, 6, 12, 18, 24]} for k in results}
+    results_al = {k: [] for k in results}
+    results_ep = {k: [] for k in results}
     for idx, storm_id in enumerate(results['id_list']):
         target = results_al if 'AL' in storm_id else results_ep if 'EP' in storm_id else None
         if target:
             target['id_list'].append(storm_id)
             for key in ['diurnal_pixel', 'diurnal_count', 'intensity_pixel', 'intensity_count']:
                 target[key].append(results[key][idx])
-            for h in target['wind_change']:
-                target['wind_change'][h]['pixel'].append(results['wind_change'][h]['pixel'][idx])
-                target['wind_change'][h]['count'].append(results['wind_change'][h]['count'][idx])
     return results_al, results_ep
-
-
-results_al, results_ep = split_basin(results)
 
 
 # ================= Clean data =================
@@ -520,9 +516,6 @@ def clean_all(results: dict) -> dict:
                                                                     results['diurnal_count'])
     results['intensity_pixel'], results['intensity_count'] = clean_func(results['intensity_pixel'],
                                                                         results['intensity_count'])
-    for h in results['wind_change']:
-        results['wind_change'][h]['pixel'], results['wind_change'][h]['count'] = clean_func(
-            results['wind_change'][h]['pixel'], results['wind_change'][h]['count'])
     return results
 
 
@@ -570,7 +563,6 @@ if __name__ == '__main__':
     results = {
         'diurnal_pixel': [], 'diurnal_count': [],
         'intensity_pixel': [], 'intensity_count': [],
-        'wind_change': {f'{h:+}': {'pixel': [], 'count': []} for h in [-24, -18, -12, -6, 6, 12, 18, 24]},
         'id_list': []
     }
 
@@ -589,6 +581,7 @@ if __name__ == '__main__':
 
             results['id_list'].append(atcf_id)
 
+    results_al, results_ep = split_basin(results)
     results = clean_all(results)
     results_al = clean_all(results_al)
     results_ep = clean_all(results_ep)
