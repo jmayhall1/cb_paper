@@ -9,7 +9,6 @@ import ephem
 import numpy as np
 import pandas as pd
 from keras.models import load_model
-from wind_calc import Wind
 
 
 # ----------------------------
@@ -102,10 +101,6 @@ def running(i: int, file: str, path_len: int, paths: dict, c8_scaled: pd.DataFra
     # Max wind
     wind = storm['max_winds'].values[0] if not storm.empty else None
 
-    # Compute wind change
-    wind_calc = Wind(df_storm_id, real_time, wind_dict)
-    wind_dif_list = wind_calc.wind_change_calc()
-
     # Load CH13 brightness
     with np.load(file) as data:
         x_test = data["brightness"]
@@ -149,7 +144,7 @@ def running(i: int, file: str, path_len: int, paths: dict, c8_scaled: pd.DataFra
     # Count TCB pixels
     tcb_pixels = np.nansum(predict[0, :, :, 0] > 0.02)
 
-    return [diurnal_time, rounded_wind, wind_dif_list, tcb_pixels, df_storm_id]
+    return [diurnal_time, rounded_wind, tcb_pixels, df_storm_id]
 
 
 def mp_running(kwargs: dict):

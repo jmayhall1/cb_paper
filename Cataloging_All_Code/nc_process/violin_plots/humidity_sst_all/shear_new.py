@@ -77,17 +77,16 @@ def fig_to_rgb(fig):
 # ---------------- Plotting Functions ---------------- #
 def plot_violin_2panel(data1, labels1, data2, labels2, suptitle, xlabel, ylabel, filename):
     """
-    Plot two side-by-side violin plots: violins + quartiles from 3-hour bins, hourly medians as a line.
+    Plot two side-by-side violin plots: violins + quartiles
     """
 
     def plot_single_violin(ax: plt.axis, data: list, labels: list, panel_title: str):
-        # --- Bin data into 3-hour intervals ---
-        bin_centers = list(range(0, 24, 3))  # 0, 3, ..., 21
+        bin_centers = list(range(18, 33, 1))
         bins = defaultdict(list)
         for group, label_group in zip(data, labels):
-            for val, hr in zip(group, label_group):
-                binned_hr = (3 * (hr // 3)) % 24  # ensures 24 → 0 bin
-                bins[binned_hr].append(val)
+            for val, lab in zip(group, label_group):
+                binned_lab = lab
+                bins[binned_lab].append(val)
 
         # --- Prepare violin data ---
         violin_positions = np.array(sorted(bins.keys()), dtype=float)
@@ -121,7 +120,7 @@ def plot_violin_2panel(data1, labels1, data2, labels2, suptitle, xlabel, ylabel,
         ax.tick_params(axis='both', labelsize=14)
         parts = ax.violinplot(
             violin_data, positions=violin_positions, showmeans=False,
-            showmedians=False, showextrema=False, widths=2.5
+            showmedians=False, showextrema=False, widths=0.5
         )
         for pc in parts['bodies']:
             pc.set_facecolor('#FFA500')
@@ -133,11 +132,12 @@ def plot_violin_2panel(data1, labels1, data2, labels2, suptitle, xlabel, ylabel,
         ax.vlines(violin_positions, whiskers_min, whiskers_max, color='k', lw=1)
 
         # --- Formatting ---
-        ax.set_xlim((-2, 24))
-        ax.set_xticks(range(0, 24, 3))
-        ax.set_xticklabels(np.arange(0, 24, 3), rotation=45, ha='right')
+        ax.set_xlim((17, 33))
+        ax.set_xticks(range(18, 33, 1))
+        ax.set_xticklabels(np.arange(18, 33, 1), rotation=45, ha='right')
         ax.set_ylim((0, 60))
         ax.set_title(panel_title, fontsize=16)
+        ax.tick_params(axis='both', labelsize=14)
         ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
 
         # --- Sample counts ---
@@ -167,30 +167,28 @@ def plot_violin_2panel(data1, labels1, data2, labels2, suptitle, xlabel, ylabel,
 def plot_contourf_2panel(data1: list, labels1: list, data2: list, labels2: list, suptitle: str, xlabel: str,
                          ylabel: str, filename: str):
     """
-    Plot p-values after binning data into 3-hour intervals.
+    Plot p-values
     """
 
-    def bin_data_by_3hr(data: list, labels: list):
+    def bin_data(data: list, labels: list):
         """
-        Bin data into 3-hourly bins centered on 0, 3, ..., 21.
-        The 24-hour bin wraps into 0.
+        Bin data
         """
         bins = defaultdict(list)  # key: (x_bin, y_bin) => list of values
 
         for group, label_group in zip(data, labels):
-            for val, (x_hr, y_hr) in zip(group, zip(label_group, label_group)):
-                # Wrap 24 -> 0
-                x_bin = (int(x_hr) % 24) // 3 * 3
-                y_bin = (int(y_hr) % 24) // 3 * 3
+            for val, (x_lab, y_lab) in zip(group, zip(label_group, label_group)):
+                x_bin = (int(x_lab))
+                y_bin = (int(y_lab))
                 bins[(x_bin, y_bin)].append(val)
 
-        bin_centers = list(range(0, 24, 3))
+        bin_centers = list(range(18, 33, 1))
         grid = [[bins.get((x, y), []) for x in bin_centers] for y in bin_centers]
         return grid, bin_centers
 
     # Bin and compute p-value grids
-    binned1, centers1 = bin_data_by_3hr(data1, labels1)
-    binned2, centers2 = bin_data_by_3hr(data2, labels2)
+    binned1, centers1 = bin_data(data1, labels1)
+    binned2, centers2 = bin_data(data2, labels2)
 
     pvals1 = compute_pval_grid(binned1)
     pvals2 = compute_pval_grid(binned2)
@@ -198,7 +196,7 @@ def plot_contourf_2panel(data1: list, labels1: list, data2: list, labels2: list,
     fig, axes = plt.subplots(1, 2, figsize=(16, 8))
 
     # Common tick marks
-    tick_marks = range(0, 24, 3)
+    tick_marks = range(18, 33, 1)
 
     # Left panel (Atlantic)
     x, y = np.meshgrid(centers1, centers1)
@@ -210,12 +208,13 @@ def plot_contourf_2panel(data1: list, labels1: list, data2: list, labels2: list,
     x_masked = x_flat[mask]
     y_masked = y_flat[mask]
     axes[0].scatter(x_masked, y_masked, c='black', s=200, label='p < 0.05')
-    axes[0].set_xlim((-1, 24))
-    axes[0].set_ylim((-1, 24))
+    axes[0].set_xlim((17, 33))
+    axes[0].set_ylim((17, 33))
     axes[0].set_xticks(tick_marks)
     axes[0].set_yticks(tick_marks)
     axes[0].set_xticklabels(tick_marks, rotation=45, ha='right')
     axes[0].set_yticklabels(tick_marks)
+    axes[0].tick_params(axis='both', labelsize=14)
     axes[0].set_title('Atlantic', fontsize=16)
     axes[0].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
 
@@ -229,12 +228,13 @@ def plot_contourf_2panel(data1: list, labels1: list, data2: list, labels2: list,
     x_masked = x_flat[mask]
     y_masked = y_flat[mask]
     axes[1].scatter(x_masked, y_masked, c='black', s=200, label='p < 0.05')
-    axes[1].set_xlim((-1, 24))
-    axes[1].set_ylim((-1, 24))
+    axes[1].set_xlim((17, 33))
+    axes[1].set_ylim((17, 33))
     axes[1].set_xticks(tick_marks)
     axes[1].set_yticks(tick_marks)
     axes[1].set_xticklabels(tick_marks, rotation=45, ha='right')
     axes[1].set_yticklabels(tick_marks)
+    axes[1].tick_params(axis='both', labelsize=14)
     axes[1].set_title('Eastern Pacific', fontsize=16)
     axes[1].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
 
@@ -248,19 +248,19 @@ def plot_contourf_2panel(data1: list, labels1: list, data2: list, labels2: list,
     handles, labels = axes[0].get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
     fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=16)
-    plt.savefig(filename)
+    plt.savefig(filename, dpi=300, bbox_inches="tight")
     return fig, axes
 
 
-def plot_rh_violin_ax(ax, data, labels, title):
-    # --- Bin data into 3-hour intervals ---
-    bin_centers = list(range(0, 24, 3))
+def plot_rh_violin_ax(ax, data, labels, title, rh_lims):
+    start, end, step = rh_lims
+    bin_centers = list(range(start, end, step))
     bins = defaultdict(list)
 
     for group, label_group in zip(data, labels):
-        for val, hr in zip(group, label_group):
-            binned_hr = (3 * (hr // 3)) % 24
-            bins[binned_hr].append(val)
+        for val, lab in zip(group, label_group):
+            binned_lab = (10 * (lab // 10))
+            bins[binned_lab].append(val)
 
     violin_positions = np.array(sorted(bins.keys()), dtype=float)
     violin_data = [np.asarray(bins[bc], dtype=float) for bc in violin_positions]
@@ -300,6 +300,7 @@ def plot_rh_violin_ax(ax, data, labels, title):
     ax.scatter(violin_positions, medians, color='blue', s=80, zorder=3)
     ax.vlines(violin_positions, quartile1, quartile3, color='k', lw=2)
     ax.vlines(violin_positions, whiskers_min, whiskers_max, color='k', lw=1)
+    ax.tick_params(axis='both', labelsize=14)
 
     # --- Sample size labels ---
     for pos, values in zip(violin_positions, violin_data):
@@ -322,10 +323,10 @@ def plot_rh_violin_ax(ax, data, labels, title):
             zorder=5
         )
 
-    ax.set_xlim((-2, 24))
-    ax.set_xticks(range(0, 24, 3))
+    ax.set_xlim((start - 2, end + 2))
+    ax.set_xticks(range(start, end, step))
     ax.set_ylim((0, 60))
-    ax.grid(True, linestyle='--', alpha=1)
+    ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
     ax.set_title(title, fontsize=18)
 
 
@@ -461,9 +462,10 @@ if __name__ == '__main__':
     # ------------------ Plot RH ------------------ #
     rh_ids = ['lo', 'md', 'hi']
     rh_labels = rh_titles = ['850-700 hPa RH', '700-500 hPa RH', '500-300 hPa RH']
+    rh_lims = [(40, 91, 10), (30, 91, 10), (20, 91, 10)]
     data_AL_rh, labels_AL_rh = prepare_rh_data(results_AL)
     data_EP_rh, labels_EP_rh = prepare_rh_data(results_EP)
-    fig, axes = plt.subplots(2, 3, figsize=(24, 16), sharex=True, sharey=True)
+    fig, axes = plt.subplots(2, 3, figsize=(24, 16))
 
     for col in range(3):
         # Atlantic (top row)
@@ -471,7 +473,8 @@ if __name__ == '__main__':
             axes[0, col],
             data_AL_rh[col],
             labels_AL_rh[col],
-            f'Atlantic: {rh_titles[col]}'
+            f'Atlantic: {rh_titles[col]}',
+            rh_lims[col]
         )
 
         # Eastern Pacific (bottom row)
@@ -479,18 +482,18 @@ if __name__ == '__main__':
             axes[1, col],
             data_EP_rh[col],
             labels_EP_rh[col],
-            f'Eastern Pacific: {rh_titles[col]}'
+            f'Eastern Pacific: {rh_titles[col]}',
+            rh_lims[col]
         )
 
     fig.suptitle('TCB Occurrences vs RH', fontsize=26)
     fig.supxlabel('RH (%)', fontsize=24)
     fig.supylabel('Percentage of Storm Pixels with TCBs', fontsize=24)
 
-    plt.tight_layout(rect=[0.04, 0.04, 1, 0.94])
-    plt.savefig('rh_ALEP.png')
+    plt.savefig('rh_ALEP.png', dpi=300, bbox_inches="tight")
     plt.close()
 
-    fig, axes = plt.subplots(2, 3, figsize=(24, 16), sharex=True, sharey=True)
+    fig, axes = plt.subplots(2, 3, figsize=(24, 16))
 
     for col in range(3):
         for row, (data, labels, basin) in enumerate([
@@ -502,16 +505,19 @@ if __name__ == '__main__':
             X, Y = np.meshgrid(x, y)
 
             mask = pvals < 0.05
-            axes[row, col].scatter(
-                X[mask], Y[mask], c='black', s=200
-            )
+            axes[row, col].scatter(X[mask], Y[mask], c='black', s=200, label='p < 0.05')
             axes[row, col].set_title(f'{basin}: {rh_titles[col]}', fontsize=18)
-            axes[row, col].grid(True, linestyle='--')
+            axes[row, col].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
+            axes[row, col].set_xlim(rh_lims[col][0] - 5, rh_lims[col][1] + 4)
+            axes[row, col].set_ylim(rh_lims[col][0] - 5, rh_lims[col][1] + 4)
+            axes[row, col].tick_params(axis='both', labelsize=14)
 
     fig.suptitle('RH Mann–Whitney P-Values', fontsize=26)
     fig.supxlabel('RH (%)', fontsize=24)
     fig.supylabel('RH (%)', fontsize=24)
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=16)
 
-    plt.tight_layout(rect=[0.04, 0.04, 1, 0.94])
-    plt.savefig('rh_ALEP_mannwhitney.png')
+    plt.savefig('rh_ALEP_mannwhitney.png', dpi=300, bbox_inches="tight")
     plt.close()
