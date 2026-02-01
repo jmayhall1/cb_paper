@@ -149,8 +149,8 @@ def plot_violin_2panel_diurnal(data1, labels1, data2, labels2, suptitle, xlabel,
             pc.set_alpha(1)
 
         ax.scatter(violin_positions, medians, color='blue', s=80, zorder=3)
-        ax.vlines(violin_positions, quartile1, quartile3, color='k', lw=10)
-        ax.vlines(violin_positions, whiskers_min, whiskers_max, color='k', lw=5)
+        ax.vlines(violin_positions, quartile1, quartile3, color='k', lw=5)
+        ax.vlines(violin_positions, whiskers_min, whiskers_max, color='k', lw=2)
 
         # --- Formatting ---
         ax.set_xlim((-2, 24))
@@ -329,6 +329,8 @@ def plot_violin_2panel_intensity(data1, labels1, data2, labels2, suptitle, xlabe
         ax.scatter(violin_positions, medians, color='blue', s=80, zorder=3)
         ax.vlines(violin_positions, quartile1, quartile3, color='k', lw=5)
         ax.vlines(violin_positions, whiskers_min, whiskers_max, color='k', lw=2)
+        ax.axvline(x=-20, color='blue', linestyle='--', lw=3, label='RW Threshold')
+        ax.axvline(x=30, color='magenta', linestyle='--', lw=3, label='RI Threshold')
 
         # --- Formatting ---
         ax.set_xlim((15, 165))
@@ -354,6 +356,9 @@ def plot_violin_2panel_intensity(data1, labels1, data2, labels2, suptitle, xlabe
     fig, axes = plt.subplots(1, 2, figsize=(16, 8))
     plot_single_violin(axes[0], data1, labels1, 'Atlantic')
     plot_single_violin(axes[1], data2, labels2, 'Eastern Pacific')
+    handles, labels = axes[0].get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=20, framealpha=0)
 
     fig.suptitle(suptitle, fontsize=28, y=0.98)
     fig.supxlabel(xlabel, fontsize=25, y=0)
