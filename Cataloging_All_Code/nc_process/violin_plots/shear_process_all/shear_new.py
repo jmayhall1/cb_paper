@@ -1,48 +1,55 @@
 # coding=utf-8
 """
-Last Edited: 07/10/2025
+Last Edited: 10/02/2025
 @author: John Mark Mayhall
 Purpose: Identify transverse bands in TC quadrants based on shear vector.
 """
 import glob
+from collections import defaultdict
+from multiprocessing import Pool
+
 import matplotlib as mpl
 import matplotlib.patheffects as path_effects
 import matplotlib.pyplot as plt
 import numpy as np
-import os
 import pandas as pd
-from collections import defaultdict
 from matplotlib.cm import ScalarMappable
 from matplotlib.ticker import FuncFormatter
-from multiprocessing import Pool
 from scipy.stats import mannwhitneyu
 from shear_multi import mp_running, init_worker
 
 
+# ----------------------------
+# Axis labeling functions
+# ----------------------------
 def label_every_10(x, pos):
-    """
-    Function for creating labels every 10 points.
-    :param x: Tick marks
-    :return: Tick labels
-    """
+    """Return tick label every 10 units."""
+    _ = pos  # Adding dummy variable to ensure pos not used warning is not present.
     return f"{int(x)}" if x % 10 == 0 else ''
 
 
-def label_every_20(x, pos):
+def label_every_20(x: int, pos) -> str:
     """
-    Function for creating labels every 20 points.
-    :param x: Tick marks
+    Tick Formatter
+    :param x: Number of ticks
+    :param pos: Position
     :return: Tick labels
     """
+    _ = pos  # Adding dummy variable to ensure pos not used warning is not present.
+    """Return tick label every 20 units."""
     return f"{int(x)}" if x % 20 == 0 else ''
 
 
-def group_func(data: list, group_labels: list) -> list:
+# ----------------------------
+# Data grouping and cleaning
+# ----------------------------
+def group_func(data: list[float], group_labels: list[int]) -> tuple[list[list[float]], list[list[int]]]:
     """
-    Function for grouping data and labels in nested lists.
-    :param data: Data to be grouped
-    :param group_labels: Grouping labels
-    :return: Two nested lists of grouped data and labels
+    Group data by labels and convert to percentage.
+
+    :param data: Values to be grouped
+    :param group_labels: Labels corresponding to values
+    :return: Tuple of (grouped data in percent, grouped labels)
     """
     sorted_pairs = sorted(zip(group_labels, data))
     group_labels, data = zip(*sorted_pairs)
@@ -66,34 +73,419 @@ def group_func(data: list, group_labels: list) -> list:
     for d in data:
         final_data.append([(num / (1024 * 1024)) * 100 for num in d])
         flat = [item for sublist in final_data for item in sublist]
-        if np.max(flat) > 60:
-            print(f'High final data: {final_data}')
 
     return final_data, group_labels
 
+def clean_func(list1: list, list2: list) -> tuple[list, list]:
+    """
+    Remove None values from two parallel lists.
 
-def adjacent_values(sorted_array, q1, q3):
-    """Calculate adjacent values for whiskers in box/violin plots."""
+    :param list1: First list
+    :param list2: Second list
+    :return: Cleaned lists
+    """
+    valid_indices = [i for i, (v1, v2) in enumerate(zip(list1, list2)) if v1 is not None and v2 is not None]
+    return [list1[i] for i in valid_indices], [list2[i] for i in valid_indices]
+
+def fig_to_rgb(fig):
+    fig.canvas.draw()
+    w, h = fig.canvas.get_width_height()
+    buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+    return buf.reshape(h, w, 3)
+
+
+# ----------------------------
+# Violin/Box plot helpers
+# ----------------------------
+def adjacent_values(sorted_array: np.ndarray, q1: float, q3: float) -> tuple[float, float]:
+    """Compute whisker limits for violin/box plots."""
     iqr = q3 - q1
-    upper_adj = q3 + 1.5 * iqr
-    lower_adj = q1 - 1.5 * iqr
-    upper = max([x for x in sorted_array if x <= upper_adj], default=q3)
-    lower = min([x for x in sorted_array if x >= lower_adj], default=q1)
+    upper = min(max(sorted_array[sorted_array <= q3 + 1.5 * iqr], default=q3), max(sorted_array))
+    lower = max(min(sorted_array[sorted_array >= q1 - 1.5 * iqr], default=q1), min(sorted_array))
     return lower, upper
 
-def compute_pval_grid(data: list) -> np.array:
+
+def plot_violin_2panel_diurnal(data1, labels1, data2, labels2, suptitle, xlabel, ylabel, filename):
     """
-    Compute pairwise Mann-Whitney p-values between data groups.
-    :param data: Data to be tested.
-    :return: P-values
+    Plot two side-by-side violin plots: violins + quartiles from 3-hour bins, hourly medians as a line.
     """
-    n = len(data)
-    p_grid = np.full((n, n), np.nan)
+
+    def plot_single_violin(ax: plt.axis, data: list, labels: list, panel_title: str):
+        # --- Bin data into 3-hour intervals ---
+        bin_centers = list(range(0, 24, 3))  # 0, 3, ..., 21
+        bins = defaultdict(list)
+        for group, label_group in zip(data, labels):
+            for val, hr in zip(group, label_group):
+                binned_hr = (3 * (hr // 3)) % 24  # ensures 24 → 0 bin
+                bins[binned_hr].append(val)
+
+        # --- Prepare violin data ---
+        violin_data = [bins[bc] for bc in bin_centers if bc in bins]
+        violin_positions = [bc for bc in bin_centers if bc in bins]
+
+        # Compute quartiles and whiskers for each group manually
+        quartile1, medians, quartile3 = [], [], []
+        whiskers_min, whiskers_max = [], []
+
+        for group in violin_data:
+            group = group[np.isfinite(group)]
+
+            if group.size == 0:
+                quartile1.append(np.nan)
+                medians.append(np.nan)
+                quartile3.append(np.nan)
+                whiskers_min.append(np.nan)
+                whiskers_max.append(np.nan)
+                continue
+
+            q1, med, q3 = np.percentile(group, [25, 50, 75])
+            whisk_min, whisk_max = adjacent_values(group, q1, q3)
+
+            quartile1.append(float(q1))
+            medians.append(float(med))
+            quartile3.append(float(q3))
+            whiskers_min.append(float(whisk_min))
+            whiskers_max.append(float(whisk_max))
+
+        # --- Plot violins ---
+        ax.tick_params(axis='both', labelsize=18)
+        parts = ax.violinplot(
+            violin_data, positions=violin_positions, showmeans=False,
+            showmedians=False, showextrema=False, widths=2
+        )
+        for pc in parts['bodies']:
+            pc.set_facecolor('#FFA500')
+            pc.set_edgecolor('black')
+            pc.set_alpha(1)
+
+        ax.scatter(violin_positions, medians, color='blue', s=80, zorder=3)
+        ax.vlines(violin_positions, quartile1, quartile3, color='k', lw=5)
+        ax.vlines(violin_positions, whiskers_min, whiskers_max, color='k', lw=2)
+
+        # --- Formatting ---
+        ax.set_xlim((-2, 23))
+        ax.set_xticks(range(0, 24, 3))
+        ax.set_xticklabels(np.arange(0, 24, 3), rotation=45, ha='right')
+        ax.set_ylim((0, 60))
+        ax.set_title(panel_title, fontsize=28)
+        ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
+
+        # --- Sample counts ---
+        for pos, values in zip(violin_positions, violin_data):
+            if len(values) == 0:
+                continue
+            y = min(max(values) + 2, 60)
+            ax.text(
+                pos, y, f'{len(values)}', ha='center', fontsize=18, fontweight='bold',
+                rotation=90, va='center',
+                path_effects=[path_effects.Stroke(linewidth=2, foreground='white'),
+                              path_effects.Normal()]
+            )
+
+    # --- Create horizontal 2-panel plot ---
+    fig, axes = plt.subplots(1, 2, figsize=(16, 8))
+    plot_single_violin(axes[0], data1, labels1, 'Atlantic')
+    plot_single_violin(axes[1], data2, labels2, 'Eastern Pacific')
+
+    fig.suptitle(suptitle, fontsize=28)
+    fig.supxlabel(xlabel, fontsize=28)
+    fig.supylabel(ylabel, fontsize=28, x=0.05)
+    plt.savefig(filename)
+    return fig, axes
+
+
+def plot_contourf_2panel_diurnal(data1: list, labels1: list, data2: list, labels2: list, suptitle: str, xlabel: str,
+                         ylabel: str, filename: str):
+    """
+    Plot p-values after binning data into 3-hour intervals.
+    """
+
+    def bin_data_by_3hr(data: list, labels: list):
+        """
+        Bin data into 3-hourly bins centered on 0, 3, ..., 21.
+        The 24-hour bin wraps into 0.
+        """
+        bins = defaultdict(list)  # key: (x_bin, y_bin) => list of values
+
+        for group, label_group in zip(data, labels):
+            for val, (x_hr, y_hr) in zip(group, zip(label_group, label_group)):
+                # Wrap 24 -> 0
+                x_bin = (int(x_hr) % 24) // 3 * 3
+                y_bin = (int(y_hr) % 24) // 3 * 3
+                bins[(x_bin, y_bin)].append(val)
+
+        bin_centers = list(range(0, 24, 3))
+        grid = [[bins.get((x, y), []) for x in bin_centers] for y in bin_centers]
+        return grid, bin_centers
+
+    # Bin and compute p-value grids
+    binned1, centers1 = bin_data_by_3hr(data1, labels1)
+    binned2, centers2 = bin_data_by_3hr(data2, labels2)
+
+    pvals1 = compute_pval_grid(binned1)
+    pvals2 = compute_pval_grid(binned2)
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 8))
+
+    # Common tick marks
+    tick_marks = range(0, 24, 3)
+
+    # Left panel (Atlantic)
+    x, y = np.meshgrid(centers1, centers1)
+    z = np.array(pvals1)
+    x_flat = x.ravel()
+    y_flat = y.ravel()
+    z_flat = z.ravel()
+    mask = z_flat < 0.05
+    x_masked = x_flat[mask]
+    y_masked = y_flat[mask]
+    axes[0].scatter(x_masked, y_masked, c='black', s=200, label='p < 0.05')
+    axes[0].set_xlim((-1, 22))
+    axes[0].set_ylim((-1, 22))
+    axes[0].set_xticks(tick_marks)
+    axes[0].set_yticks(tick_marks)
+    axes[0].set_xticklabels(tick_marks, rotation=45, ha='right')
+    axes[0].set_yticklabels(tick_marks)
+    axes[0].set_title('Atlantic', fontsize=28)
+    axes[0].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
+    axes[0].tick_params(axis='both', labelsize=18)
+
+    # Right panel (Eastern Pacific)
+    x, y = np.meshgrid(centers2, centers2)
+    z = np.array(pvals2)
+    x_flat = x.ravel()
+    y_flat = y.ravel()
+    z_flat = z.ravel()
+    mask = z_flat < 0.05
+    x_masked = x_flat[mask]
+    y_masked = y_flat[mask]
+    axes[1].scatter(x_masked, y_masked, c='black', s=200, label='p < 0.05')
+    axes[1].set_xlim((-1, 23))
+    axes[1].set_ylim((-1, 23))
+    axes[1].set_xticks(tick_marks)
+    axes[1].set_yticks(tick_marks)
+    axes[1].set_xticklabels(tick_marks, rotation=45, ha='right')
+    axes[1].set_yticklabels(tick_marks)
+    axes[1].set_title('Eastern Pacific', fontsize=28)
+    axes[1].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
+    axes[1].tick_params(axis='both', labelsize=18)
+
+    # Final layout
+    fig.subplots_adjust(bottom=0.25)
+    fig.suptitle(suptitle, fontsize=28, y=0.98)
+    fig.supxlabel(xlabel, fontsize=28, y=0.13)
+    fig.supylabel(ylabel, fontsize=28, x=0.05)
+
+    # Add legend
+    handles, labels = axes[0].get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=20, framealpha=0)
+    plt.savefig(filename)
+    return fig, axes
+
+def plot_violin_2panel_intensity(data1, labels1, data2, labels2, suptitle, xlabel, ylabel, filename):
+    """
+    Plot two side-by-side violin plots: violins + quartiles from 3-hour bins, hourly medians as a line.
+    """
+
+    def plot_single_violin(ax: plt.axis, data: list, labels: list, panel_title: str):
+        # --- Bin data into 3-hour intervals ---
+        bin_centers = list(range(20, 161, 10))  # 0, 3, ..., 21
+        bins = defaultdict(list)
+        for group, label_group in zip(data, labels):
+            for val, lab in zip(group, label_group):
+                binned_lab = (10 * (lab // 10))  # ensures 24 → 0 bin
+                bins[binned_lab].append(val)
+
+        # --- Prepare violin data ---
+        violin_positions = np.array(sorted(bins.keys()), dtype=float)
+        violin_data = [np.asarray(bins[bc], dtype=float) for bc in violin_positions]
+
+        # Compute quartiles and whiskers for each group manually
+        quartile1, medians, quartile3 = [], [], []
+        whiskers_min, whiskers_max = [], []
+
+        for group in violin_data:
+            group = group[np.isfinite(group)]
+
+            if group.size == 0:
+                quartile1.append(np.nan)
+                medians.append(np.nan)
+                quartile3.append(np.nan)
+                whiskers_min.append(np.nan)
+                whiskers_max.append(np.nan)
+                continue
+
+            q1, med, q3 = np.percentile(group, [25, 50, 75])
+            whisk_min, whisk_max = adjacent_values(group, q1, q3)
+
+            quartile1.append(float(q1))
+            medians.append(float(med))
+            quartile3.append(float(q3))
+            whiskers_min.append(float(whisk_min))
+            whiskers_max.append(float(whisk_max))
+
+        # --- Plot violins ---
+        ax.tick_params(axis='both', labelsize=18)
+        parts = ax.violinplot(
+            violin_data, positions=violin_positions, showmeans=False,
+            showmedians=False, showextrema=False, widths=8
+        )
+        for pc in parts['bodies']:
+            pc.set_facecolor('#FFA500')
+            pc.set_edgecolor('black')
+            pc.set_alpha(1)
+
+        ax.scatter(violin_positions, medians, color='blue', s=80, zorder=3)
+        ax.vlines(violin_positions, quartile1, quartile3, color='k', lw=5)
+        ax.vlines(violin_positions, whiskers_min, whiskers_max, color='k', lw=2)
+        ax.axvline(x=65, color='orange', linestyle='--', lw=3, label='TS/HUR Transition')
+        ax.axvline(x=95, color='magenta', linestyle='--', lw=3, label='HUR/MAJ HUR Transition')
+
+        # --- Formatting ---
+        ax.set_xlim((15, 165))
+        ax.set_xticks(range(20, 161, 10))
+        ax.set_xticklabels(np.arange(20, 161, 10), rotation=45, ha='right')
+        ax.set_ylim((0, 60))
+        ax.set_title(panel_title, fontsize=28)
+        ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
+
+        # --- Sample counts ---
+        for pos, values in zip(violin_positions, violin_data):
+            if len(values) == 0:
+                continue
+            y = min(max(values) + 2, 60)
+            ax.text(
+                pos, y, f'{len(values)}', ha='center', fontsize=18, fontweight='bold',
+                rotation=90, va='center',
+                path_effects=[path_effects.Stroke(linewidth=2, foreground='white'),
+                              path_effects.Normal()]
+            )
+
+    # --- Create horizontal 2-panel plot ---
+    fig, axes = plt.subplots(1, 2, figsize=(16, 8))
+    plot_single_violin(axes[0], data1, labels1, 'Atlantic')
+    plot_single_violin(axes[1], data2, labels2, 'Eastern Pacific')
+    handles, labels = axes[0].get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=15, framealpha=0)
+
+    fig.suptitle(suptitle, fontsize=28, y=0.98)
+    fig.supxlabel(xlabel, fontsize=25, y=0)
+    fig.supylabel(ylabel, fontsize=25, x=0.05)
+    plt.savefig(filename)
+    return fig, axes
+
+
+def plot_contourf_2panel_intensity(data1: list, labels1: list, data2: list, labels2: list, suptitle: str, xlabel: str,
+                         ylabel: str, filename: str):
+    """
+    Plot p-values after binning data into 3-hour intervals.
+    """
+
+    def bin_data(data: list, labels: list):
+        """
+        Bin data into 3-hourly bins centered on 0, 3, ..., 21.
+        The 24-hour bin wraps into 0.
+        """
+        bins = defaultdict(list)  # key: (x_bin, y_bin) => list of values
+
+        for group, label_group in zip(data, labels):
+            for val, (x_lab, y_lab) in zip(group, zip(label_group, label_group)):
+                x_bin = int(x_lab) // 10 * 10
+                y_bin = int(y_lab)// 10 * 10
+                bins[(x_bin, y_bin)].append(val)
+
+        bin_centers = list(range(20, 161, 10))
+        grid = [[bins.get((x, y), []) for x in bin_centers] for y in bin_centers]
+        return grid, bin_centers
+
+    # Bin and compute p-value grids
+    binned1, centers1 = bin_data(data1, labels1)
+    binned2, centers2 = bin_data(data2, labels2)
+
+    pvals1 = compute_pval_grid(binned1)
+    pvals2 = compute_pval_grid(binned2)
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 8))
+
+    # Common tick marks
+    tick_marks = range(20, 161, 10)
+
+    # Left panel (Atlantic)
+    x, y = np.meshgrid(centers1, centers1)
+    z = np.array(pvals1)
+    x_flat = x.ravel()
+    y_flat = y.ravel()
+    z_flat = z.ravel()
+    mask = z_flat < 0.05
+    x_masked = x_flat[mask]
+    y_masked = y_flat[mask]
+    axes[0].scatter(x_masked, y_masked, c='black', s=200, label='p < 0.05')
+    axes[0].set_xlim((15, 165))
+    axes[0].set_ylim((15, 165))
+    axes[0].set_xticks(tick_marks)
+    axes[0].set_yticks(tick_marks)
+    axes[0].set_xticklabels(tick_marks, rotation=45, ha='right')
+    axes[0].set_yticklabels(tick_marks)
+    axes[0].set_title('Atlantic', fontsize=28)
+    axes[0].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
+    axes[0].tick_params(axis='both', labelsize=18)
+
+    # Right panel (Eastern Pacific)
+    x, y = np.meshgrid(centers2, centers2)
+    z = np.array(pvals2)
+    x_flat = x.ravel()
+    y_flat = y.ravel()
+    z_flat = z.ravel()
+    mask = z_flat < 0.05
+    x_masked = x_flat[mask]
+    y_masked = y_flat[mask]
+    axes[1].scatter(x_masked, y_masked, c='black', s=200, label='p < 0.05')
+    axes[1].set_xlim((15, 165))
+    axes[1].set_ylim((15, 165))
+    axes[1].set_xticks(tick_marks)
+    axes[1].set_yticks(tick_marks)
+    axes[1].set_xticklabels(tick_marks, rotation=45, ha='right')
+    axes[1].set_yticklabels(tick_marks)
+    axes[1].set_title('Eastern Pacific', fontsize=28)
+    axes[1].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
+    axes[1].tick_params(axis='both', labelsize=18)
+
+    # Final layout
+    fig.subplots_adjust(bottom=0.25)
+    fig.suptitle(suptitle, fontsize=28, y=0.98)
+    fig.supxlabel(xlabel, fontsize=28, y=0.13)
+    fig.supylabel(ylabel, fontsize=28, x=0.05)
+
+    # Add legend
+    handles, labels = axes[0].get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=20, framealpha=0)
+    plt.savefig(filename)
+    return fig, axes
+
+
+def compute_pval_grid(grid: list[list[list[float]]]) -> np.ndarray:
+    """
+    Compute Mann-Whitney p-values for a 2D grid of lists-of-values.
+    Returns a np.array of shape (n_bins, n_bins).
+    """
+    n = len(grid)
+    pvals = np.full((n, n), np.nan)
+
     for i in range(n):
         for j in range(n):
-            _, p = mannwhitneyu(data[i], data[j], alternative='two-sided')
-            p_grid[i, j] = p
-    return p_grid
+            data_i = grid[i]
+            data_j = grid[j]
+            # flatten row into single list of values
+            vals_i = [v for cell in data_i for v in (cell if isinstance(cell, list) else [cell])]
+            vals_j = [v for cell in data_j for v in (cell if isinstance(cell, list) else [cell])]
+
+            if vals_i and vals_j:  # both non-empty
+                _, p = mannwhitneyu(vals_i, vals_j, alternative='two-sided')
+                pvals[i, j] = p
+    return pvals
 
 
 def clean_func(list1: list, list2: list) -> list:
@@ -111,420 +503,153 @@ def clean_func(list1: list, list2: list) -> list:
     cleaned_list2 = [v for i, v in enumerate(list2) if i not in none_indices]
     return cleaned_list1, cleaned_list2
 
+def split_basin(results: dict):
+    """
+    Function to split analysis results by basin.
+    :param results: Analysis results
+    :return: Split Results
+    """
+    results_al = {k: [] for k in results}
+    results_ep = {k: [] for k in results}
+    for idx, storm_id in enumerate(results['id_list']):
+        target = results_al if 'AL' in storm_id else results_ep if 'EP' in storm_id else None
+        if target:
+            target['id_list'].append(storm_id)
+            for key in ['diurnal_pixel', 'diurnal_count', 'intensity_pixel', 'intensity_count']:
+                target[key].append(results[key][idx])
+    return results_al, results_ep
 
-# ======================== Config ========================
-cut_off = 0.02
-ri_thresh, rw_thresh = 30, -20
-pix_threshold = min_wind_threshold = -np.inf
-max_wind_threshold = np.inf
-online, save_state = True, False
-base_dir = '/rstor/jmayhall/' if online else '//uahdata/rstor/'
 
-paths = {
-    'latlon': f'{base_dir}cataloging/nc_process/geojson_transform/completed_arrays/latlon_arrs/*.npz',
-    'hurdat': f'{base_dir}cataloging/hurdat_update.txt',
-    'model': f'{base_dir}Model_Training_Code/cnn_creation',
-    'c8': f'{base_dir}cataloging/nc_process/geojson_transform/completed_arrays/C08_scaled/*',
-    'c13': f'{base_dir}cataloging/nc_process/geojson_transform/completed_arrays/C13_scaled/*',
-    'ships': f'{base_dir}cataloging/nc_process/violin_plots/shear_process_all/ships_interp.txt'
-}
+# ================= Clean data =================
+def clean_all(results: dict) -> dict:
+    """
+    Function to run help clean function
+    :param results: Analysis results
+    :return: Cleaned analysis results
+    """
+    results['diurnal_pixel'], results['diurnal_count'] = clean_func(results['diurnal_pixel'],
+                                                                    results['diurnal_count'])
+    results['intensity_pixel'], results['intensity_count'] = clean_func(results['intensity_pixel'],
+                                                                        results['intensity_count'])
+    return results
 
-# ===================== Load Data ========================
-hurdat_df = pd.read_csv(paths['hurdat'], sep='\t')
-latlon_arrays = pd.DataFrame({'Name': glob.glob(paths['latlon'])})
-c8_scaled = pd.DataFrame({'Name': glob.glob(paths['c8'])})
-c13_scaled = glob.glob(paths['c13'])
-path_len = len(paths['c13']) - 1
-wind_dict = pd.read_csv(paths['ships'], sep='\t', index_col=0)
-norm = mpl.colors.Normalize(vmin=0.049, vmax=1)
-sm = ScalarMappable(cmap='gist_ncar', norm=norm)
-sm.set_array([])
 
-# =================== Parallel Args =======================
-needed_args = [{
-    'i': i,
-    'file': file,
-    'path_len': path_len,
-    'paths': paths,
-    'c8_scaled': c8_scaled
-} for i, file in enumerate(c13_scaled)]
+if __name__ == '__main__':
+    # ======================== Config ========================
+    cut_off = 0.02
+    ri_thresh, rw_thresh = 30, -20
+    pix_threshold = min_wind_threshold = -np.inf
+    max_wind_threshold = np.inf
+    online, save_state = True, False
+    base_dir = '/rstor/jmayhall/' if online else '//uahdata/rstor/'
 
-# ================== Collect Results =======================
-results = {
-    'diurnal_pixel': [], 'diurnal_count': [],
-    'intensity_pixel': [], 'intensity_count': [],
-    'wind_change': {f'{h:+}': {'pixel': [], 'count': []} for h in [-24, 24]},
-    'id_list': []
-}
+    paths = {
+        'latlon': f'{base_dir}cataloging/nc_process/geojson_transform/completed_arrays/latlon_arrs/*.npz',
+        'hurdat': f'{base_dir}cataloging/hurdat_update.txt',
+        'model': f'{base_dir}Model_Training_Code/cnn_creation',
+        'c8': f'{base_dir}cataloging/nc_process/geojson_transform/completed_arrays/C08_scaled/*',
+        'c13': f'{base_dir}cataloging/nc_process/geojson_transform/completed_arrays/C13_scaled/*',
+        'ships': f'{base_dir}cataloging/nc_process/violin_plots/shear_process_all/ships_interp.txt'
+    }
 
-with Pool(12, initializer=init_worker) as pool:
-    for result in pool.map(mp_running, needed_args):
-        if result is None:
-            continue
+    # ===================== Load Data ========================
+    hurdat_df = pd.read_csv(paths['hurdat'], sep='\t')
+    latlon_arrays = pd.DataFrame({'Name': glob.glob(paths['latlon'])})
+    c8_scaled = pd.DataFrame({'Name': glob.glob(paths['c8'])})
+    c13_scaled = glob.glob(paths['c13'])
+    path_len = len(paths['c13']) - 1
+    wind_dict = pd.read_csv(paths['ships'], sep='\t', index_col=0)
 
-        wind_change_counts, pixels, atcf_id = result
+    # Normalize for plotting
+    norm = mpl.colors.Normalize(vmin=0.049, vmax=1)
+    sm = ScalarMappable(cmap='gist_ncar', norm=norm)
+    sm.set_array([])
 
-        for h, wind_change in zip([-24, 24], wind_change_counts):
-            if wind_change is not None:
-                rounded_wind = int(np.round(wind_change / 20) * 20)
-            else:
-                rounded_wind = None
-            key = f'{h:+}'  # "+6", "-24", etc.
-            results['wind_change'][key]['pixel'].append(pixels)
-            results['wind_change'][key]['count'].append(rounded_wind)
-        results['id_list'].append(atcf_id)
+    # =================== Parallel Args =======================
+    needed_args = [{
+        'i': i,
+        'file': file,
+        'path_len': path_len,
+        'paths': paths,
+        'c8_scaled': c8_scaled
+    } for i, file in enumerate(c13_scaled)]
 
-# Initialize new dictionaries for AL and EP
-results_AL = {'wind_change': {f'{h:+}': {'pixel': [], 'count': []} for h in [-24, 24]}, 'id_list': []}
+    # ================== Collect Results =======================
+    results = {
+        'diurnal_pixel': [], 'diurnal_count': [],
+        'intensity_pixel': [], 'intensity_count': [],
+        'id_list': []
+    }
 
-results_EP = {'wind_change': {f'{h:+}': {'pixel': [], 'count': []} for h in [-24, 24]}, 'id_list': []}
+    # Parallel processing
+    with Pool(24, initializer=init_worker) as pool:
+        for result in pool.map(mp_running, needed_args):
+            if result is None:
+                continue
+            diurnal_count, intensity_count, pixels, atcf_id = result
 
-for idx, storm_id in enumerate(results['id_list']):
-    if 'AL' in storm_id:
-        results_AL['id_list'].append(storm_id)
-        for h in results_AL['wind_change']:
-            results_AL['wind_change'][h]['pixel'].append(results['wind_change'][h]['pixel'][idx])
-            results_AL['wind_change'][h]['count'].append(results['wind_change'][h]['count'][idx])
-    elif 'EP' in storm_id:
-        results_EP['id_list'].append(storm_id)
-        for h in results_EP['wind_change']:
-            results_EP['wind_change'][h]['pixel'].append(results['wind_change'][h]['pixel'][idx])
-            results_EP['wind_change'][h]['count'].append(results['wind_change'][h]['count'][idx])
-for h in results_AL['wind_change']:
-    results_AL['wind_change'][h]['pixel'], results_AL['wind_change'][h]['count'] = (
-        clean_func(results_AL['wind_change'][h]['pixel'], results_AL['wind_change'][h]['count']))
-for h in results['wind_change']:
-    results_EP['wind_change'][h]['pixel'], results_EP['wind_change'][h]['count'] = (
-        clean_func(results_EP['wind_change'][h]['pixel'], results_EP['wind_change'][h]['count']))
+            # Append results
+            results['diurnal_pixel'].append(pixels)
+            results['diurnal_count'].append(diurnal_count)
+            results['intensity_pixel'].append(pixels)
+            results['intensity_count'].append(int(intensity_count))
 
-# =========== Plot: Wind Change (Past) ============
-past_hours = [-24]
-data_list = ([group_func(results_AL['wind_change'][f'{h:+}']['pixel'],
-                         results_AL['wind_change'][f'{h:+}']['count'])[0] for h in past_hours] +
-             [group_func(results_EP['wind_change'][f'{h:+}']['pixel'],
-                         results_EP['wind_change'][f'{h:+}']['count'])[0] for h in past_hours])
-x_labels = ([group_func(results_AL['wind_change'][f'{h:+}']['pixel'],
-                        results_AL['wind_change'][f'{h:+}']['count'])[1] for h in past_hours] +
-            [group_func(results_EP['wind_change'][f'{h:+}']['pixel'],
-                        results_EP['wind_change'][f'{h:+}']['count'])[1] for h in past_hours])
-labels_list = [f"{h}hr" for h in past_hours] + [f"{h}hr" for h in past_hours]
+            results['id_list'].append(atcf_id)
 
-fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-fig.suptitle('TCB Occurrences vs Previous TC Intensity Change',
-             fontsize=24)
-fig.supxlabel(r'TC Wind Speed Change ($\frac{{dv}}{{dt}}, kts$)', fontsize=24)
-fig.supylabel('Percentage of Pixels with TCBs', fontsize=24)
-for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, labels_list, x_labels)):
-    labels = np.unique(np.concatenate([np.array(sublist) for sublist in labels]))
-    ax.tick_params(axis='both', labelsize=16)
-    parts = ax.violinplot(data, positions=labels, showmeans=False, showmedians=False, showextrema=False, widths=8)
+    results_al, results_ep = split_basin(results)
+    results = clean_all(results)
+    results_al = clean_all(results_al)
+    results_ep = clean_all(results_ep)
 
-    for pc in parts['bodies']:
-        pc.set_facecolor('#FFA500')
-        pc.set_edgecolor('black')
-        pc.set_alpha(1)
+    # ==================== Violin & Contour Plots for Basins =====================
+    data_al, labels_al = group_func(results_al['diurnal_pixel'], results_al['diurnal_count'])
+    data_ep, labels_ep = group_func(results_ep['diurnal_pixel'], results_ep['diurnal_count'])
+    fig1, _ = plot_violin_2panel_diurnal(data_al, labels_al, data_ep, labels_ep,
+                       suptitle='TCB Occurrences vs Diurnal Cycle Stage',
+                       xlabel='Local Solar Time',
+                       ylabel='Percentage of Storm Pixels with TCBs',
+                       filename='diurnal_violin_ALEP.png')
+    fig2, _ = plot_contourf_2panel_diurnal(data_al, labels_al, data_ep, labels_ep,
+                         suptitle='Diurnal Cycle Mann-Whitney P-Values',
+                         xlabel='Local Solar Time',
+                         ylabel='Local Solar Time',
+                         filename='diurnal_mannwhitney_ALEP.png')
 
-    # Compute quartiles and whiskers for each group manually
-    quartile1, medians, quartile3, whiskers_min, whiskers_max = [], [], [], [], []
+    img1 = fig_to_rgb(fig1)
+    img2 = fig_to_rgb(fig2)
 
-    for group in data:
-        group = np.sort(group)
-        q1, med, q3 = np.percentile(group, [25, 50, 75])
-        whisk_min, whisk_max = adjacent_values(group, q1, q3)
-        quartile1.append(q1)
-        medians.append(med)
-        quartile3.append(q3)
-        whiskers_min.append(whisk_min)
-        whiskers_max.append(whisk_max)
+    fig, ax = plt.subplots(
+        figsize=(img1.shape[1] / 100, (img1.shape[0] + img2.shape[0]) / 100)
+    )
 
-    inds = labels
-    ax.scatter(inds, medians, marker='o', color='blue', s=100, zorder=3)
-    ax.vlines(inds, quartile1, quartile3, color='k', linestyle='-', lw=5)
-    ax.vlines(inds, whiskers_min, whiskers_max, color='k', linestyle='-', lw=1)
-    ax.set_ylim((0, 60))
-    if '6' in label:
-        ax.set_xlim((-65, 45))
-        ax.set_xticks(range(-60, 41, 20))
-    elif '12' in label:
-        ax.set_xlim((-105, 65))
-        ax.set_xticks(range(-100, 61, 20))
-    elif '18' in label:
-        ax.set_xlim((-85, 85))
-        ax.set_xticks(range(-80, 81, 20))
-    elif '24' in label:
-        ax.set_xlim((-105, 105))
-        ax.set_xticks(range(-100, 101, 20))
-    ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
-    plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
-    # Ensure there's enough space at the top
-    ymin = min([np.min(d) for d in data])
-    ymax = max([np.max(d) for d in data])
-    y_offset = 0.05 * (ymax - ymin)
-    fig_ylim_top = 100
+    ax.imshow(np.vstack([img1, img2]))
+    ax.axis("off")
 
-    # Now safely add text without going above the y-limit
-    for i, d in enumerate(data):
-        offset = y_offset if i % 2 == 0 else -1 * y_offset
-        text_y = min(max(d) + offset, fig_ylim_top - 0.05 * (ymax - ymin))  # small buffer
-        ax.text(labels[i], text_y, f'{len(d)}', ha='center', fontsize=16, fontweight='bold', rotation=90, va='center',
-                path_effects=[path_effects.Stroke(linewidth=2, foreground='white'), path_effects.Normal()])
-    ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
-    ax.axvline(x=-20, color='blue', linestyle='--', lw=2, label='RW Transition')
-    ax.axvline(x=30, color='magenta', linestyle='--', lw=2, label='RI Transition')
-    if z == 0:
-        ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours (Atlantic)', fontsize=16)
-    else:
-        ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours (Eastern Pacific)', fontsize=16)
+    plt.savefig("diurnal_combined.png", dpi=300, bbox_inches="tight")
+    plt.close('all')
 
-    # Add legend after the lines are drawn
-fig.subplots_adjust(
-    left=0.07,  # space for ylabel
-    right=0.92,  # space for legend or vertical colorbar
-    bottom=0.15,  # space for supxlabel
-    top=0.88,  # space for suptitle
-    hspace=0.4,  # vertical spacing between rows
-    wspace=0.3  # horizontal spacing between columns
-)
-handles, labels = ax.get_legend_handles_labels()
-legend = fig.legend(handles, labels, loc='upper right', fontsize=12)
-legend.set_alpha(0.4)
-plt.savefig('prev_intensity_change_ALEP.png')
-plt.close()
+    data_al, labels_al = group_func(results_al['intensity_pixel'], results_al['intensity_count'])
+    data_ep, labels_ep = group_func(results_ep['intensity_pixel'], results_ep['intensity_count'])
+    fig1, _ = plot_violin_2panel_intensity(data_al, labels_al, data_ep, labels_ep,
+                       suptitle='TCB Occurrences vs TC Intensity',
+                       xlabel='TC Current Wind Speed (kts)',
+                       ylabel='Percentage of Storm Pixels with TCBs',
+                       filename='intensity_violin_ALEP.png')
+    fig2, _ = plot_contourf_2panel_intensity(data_al, labels_al, data_ep, labels_ep,
+                         suptitle='TC Intensity Mann-Whitney P-Values',
+                         xlabel='Intensity (kts)',
+                         ylabel='Intensity (kts)',
+                         filename='intensity_mannwhitney_ALEP.png')
 
-fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-fig.suptitle('Previous TC Intensity Change Mann-Whitney P-Values', fontsize=24, y=0.95)
-fig.supxlabel(r'TC Wind Speed Change ($\frac{dv}{dt}$, kts)', fontsize=24, y=0.07)
-fig.supylabel(r'TC Wind Speed Change ($\frac{dv}{dt}$, kts)', fontsize=24, x=0.05)
+    img1 = fig_to_rgb(fig1)
+    img2 = fig_to_rgb(fig2)
 
-# Loop through each subplot
-for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, labels_list, x_labels)):
-    labels = np.unique(np.concatenate([np.array(sublist) for sublist in labels]))
+    fig, ax = plt.subplots(
+        figsize=(img1.shape[1] / 100, (img1.shape[0] + img2.shape[0]) / 100)
+    )
 
-    # Compute p-value matrix
-    p_grid = compute_pval_grid(data)
-    # Create contourf plot
-    x, y = np.meshgrid(labels, labels)
-    z_pgrid = p_grid
-    # Flatten everything
-    x_flat = x.ravel()
-    y_flat = y.ravel()
-    z_flat = z_pgrid.ravel()
-    mask = z_flat < 0.05
-    x_masked = x_flat[mask]
-    y_masked = y_flat[mask]
-    # Plot only black dots for z < 0.05
-    ax.scatter(x_masked, y_masked, c='black', s=150, label='p < 0.05')
-    ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=14)
-    ax.set_yticklabels(labels, fontsize=14)
-    if '6' in label:
-        ax.set_xlim((-65, 45))
-        ax.set_ylim((-65, 45))
-        tick_marks = range(-60, 41, 20)
-    elif '12' in label:
-        ax.set_xlim((-105, 65))
-        ax.set_ylim((-105, 65))
-        tick_marks = range(-100, 61, 20)
-    elif '18' in label:
-        ax.set_xlim((-85, 85))
-        ax.set_ylim((-85, 85))
-        tick_marks = range(-80, 81, 20)
-    elif '24' in label:
-        ax.set_xlim((-105, 105))
-        ax.set_ylim((-105, 105))
-        tick_marks = range(-100, 101, 20)
-    ax.set_xticks(tick_marks)
-    ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
-    ax.set_yticks(tick_marks)
-    plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
-    ax.yaxis.set_major_formatter(FuncFormatter(label_every_20))
-    plt.setp(ax.get_yticklabels())
-    ax.set_title(f'{label}', fontsize=16)
-    ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
-    if z == 0:
-        ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours (Atlantic)', fontsize=16)
-    else:
-        ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours (Eastern Pacific)', fontsize=16)
+    ax.imshow(np.vstack([img1, img2]))
+    ax.axis("off")
 
-# Add colorbar
-fig.subplots_adjust(
-    left=0.12,  # space for ylabel
-    right=0.92,  # space for legend or vertical colorbar
-    bottom=0.25,  # space for supxlabel
-    top=0.85,  # space for suptitle
-)
-handles, labels = axes[0].get_legend_handles_labels()
-by_label = dict(zip(labels, handles))  # removes duplicates
-fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=16)
-# Adjust spacing to make room for colorbar at the bottom
-
-# Create a new axis for the horizontal colorbar that spans the full width
-plt.savefig('prev_intensity_change_ALEP_mannwhitney.png')
-plt.close()
-
-# =========== Plot: Wind Change (Future) ==========
-future_hours = [24]
-data_list = ([group_func(results_AL['wind_change'][f'{h:+}']['pixel'],
-                         results_AL['wind_change'][f'{h:+}']['count'])[0] for h in future_hours] +
-             [group_func(results_EP['wind_change'][f'{h:+}']['pixel'],
-                         results_EP['wind_change'][f'{h:+}']['count'])[0] for h in future_hours])
-x_labels = ([group_func(results_AL['wind_change'][f'{h:+}']['pixel'],
-                        results_AL['wind_change'][f'{h:+}']['count'])[1] for h in future_hours] +
-            [group_func(results_EP['wind_change'][f'{h:+}']['pixel'],
-                        results_EP['wind_change'][f'{h:+}']['count'])[1] for h in future_hours])
-labels_list = [f"{h}hr" for h in future_hours] + [f"{h}hr" for h in future_hours]
-
-fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-fig.suptitle('TCB Occurrences vs Future TC Intensity Change',
-             fontsize=24)
-fig.supxlabel(r'TC Wind Speed Change ($\frac{{dv}}{{dt}}, kts$)', fontsize=24)
-fig.supylabel('Percentage of Pixels with TCBs', fontsize=24)
-for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, labels_list, x_labels)):
-    labels = np.unique(np.concatenate([np.array(sublist) for sublist in labels]))
-    ax.tick_params(axis='both', labelsize=16)
-    parts = ax.violinplot(data, positions=labels, showmeans=False, showmedians=False, showextrema=False, widths=8)
-
-    for pc in parts['bodies']:
-        pc.set_facecolor('#FFA500')
-        pc.set_edgecolor('black')
-        pc.set_alpha(1)
-
-    # Compute quartiles and whiskers for each group manually
-    quartile1, medians, quartile3, whiskers_min, whiskers_max = [], [], [], [], []
-
-    for group in data:
-        group = np.sort(group)
-        q1, med, q3 = np.percentile(group, [25, 50, 75])
-        whisk_min, whisk_max = adjacent_values(group, q1, q3)
-        quartile1.append(q1)
-        medians.append(med)
-        quartile3.append(q3)
-        whiskers_min.append(whisk_min)
-        whiskers_max.append(whisk_max)
-
-    inds = labels
-    ax.scatter(inds, medians, marker='o', color='blue', s=100, zorder=3)
-    ax.vlines(inds, quartile1, quartile3, color='k', linestyle='-', lw=5)
-    ax.vlines(inds, whiskers_min, whiskers_max, color='k', linestyle='-', lw=1)
-    ax.set_ylim((0, 60))
-    if '6' in label:
-        ax.set_xlim((-65, 45))
-        ax.set_xticks(range(-60, 41, 20))
-    elif '12' in label:
-        ax.set_xlim((-105, 65))
-        ax.set_xticks(range(-100, 61, 20))
-    elif '18' in label:
-        ax.set_xlim((-105, 85))
-        ax.set_xticks(range(-100, 81, 20))
-    elif '24' in label:
-        ax.set_xlim((-125, 105))
-        ax.set_xticks(range(-120, 101, 20))
-    ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
-    plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
-    # Ensure there's enough space at the top
-    ymin = min([np.min(d) for d in data])
-    ymax = max([np.max(d) for d in data])
-    y_offset = 0.05 * (ymax - ymin)
-    fig_ylim_top = 100
-
-    # Now safely add text without going above the y-limit
-    for i, d in enumerate(data):
-        offset = y_offset if i % 2 == 0 else -1 * y_offset
-        text_y = min(max(d) + offset, fig_ylim_top - 0.05 * (ymax - ymin))  # small buffer
-        ax.text(labels[i], text_y, f'{len(d)}', ha='center', fontsize=16, fontweight='bold', rotation=90, va='center',
-                path_effects=[path_effects.Stroke(linewidth=2, foreground='white'), path_effects.Normal()])
-    ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
-    ax.axvline(x=-20, color='blue', linestyle='--', lw=2, label='RW Transition')
-    ax.axvline(x=30, color='magenta', linestyle='--', lw=2, label='RI Transition')
-    if z == 0:
-        ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours (Atlantic)', fontsize=16)
-    else:
-        ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours (Eastern Pacific)', fontsize=16)
-
-    # Add legend after the lines are drawn
-fig.subplots_adjust(
-    left=0.07,  # space for ylabel
-    right=0.92,  # space for legend or vertical colorbar
-    bottom=0.15,  # space for supxlabel
-    top=0.88,  # space for suptitle
-    hspace=0.4,  # vertical spacing between rows
-    wspace=0.3  # horizontal spacing between columns
-)
-handles, labels = ax.get_legend_handles_labels()
-legend = fig.legend(handles, labels, loc='upper right', fontsize=12)
-legend.set_alpha(0.4)
-plt.savefig('future_intensity_change_ALEP.png')
-plt.close()
-
-fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-fig.suptitle('Future TC Intensity Change Mann-Whitney P-Values', fontsize=24, y=0.95)
-fig.supxlabel(r'TC Wind Speed Change ($\frac{dv}{dt}$, kts)', fontsize=24, y=0.12)
-fig.supylabel(r'TC Wind Speed Change ($\frac{dv}{dt}$, kts)', fontsize=24, x=0.05)
-
-# Loop through each subplot
-for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, labels_list, x_labels)):
-    labels = np.unique(np.concatenate([np.array(sublist) for sublist in labels]))
-
-    # Compute p-value matrix
-    p_grid = compute_pval_grid(data)
-
-    # Create contourf plot
-    x, y = np.meshgrid(labels, labels)
-    z_pgrid = p_grid
-    # Flatten everything
-    x_flat = x.ravel()
-    y_flat = y.ravel()
-    z_flat = z_pgrid.ravel()
-    mask = z_flat < 0.05
-    x_masked = x_flat[mask]
-    y_masked = y_flat[mask]
-    # Plot only black dots for z < 0.05
-    ax.scatter(x_masked, y_masked, c='black', s=150, label='p < 0.05')
-    ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=14)
-    ax.set_yticklabels(labels, fontsize=14)
-    if '6' in label:
-        ax.set_xlim((-65, 45))
-        ax.set_ylim((-65, 45))
-        tick_marks = range(-60, 41, 20)
-    elif '12' in label:
-        ax.set_xlim((-105, 65))
-        ax.set_ylim((-105, 65))
-        tick_marks = range(-100, 61, 20)
-    elif '18' in label:
-        ax.set_xlim((-105, 85))
-        ax.set_ylim((-105, 85))
-        tick_marks = range(-100, 81, 20)
-    elif '24' in label:
-        ax.set_xlim((-125, 105))
-        ax.set_ylim((-125, 105))
-        tick_marks = range(-120, 101, 20)
-    ax.set_xticks(tick_marks)
-    ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
-    ax.set_yticks(tick_marks)
-    plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
-    ax.yaxis.set_major_formatter(FuncFormatter(label_every_20))
-    plt.setp(ax.get_yticklabels())
-    ax.set_title(f'{label}', fontsize=16)
-    ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
-    if z == 0:
-        ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours (Atlantic)', fontsize=16)
-    else:
-        ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours (Eastern Pacific)', fontsize=16)
-
-# Add colorbar
-# Adjust spacing to make room for colorbar at the bottom
-fig.subplots_adjust(
-    left=0.12,  # space for ylabel
-    right=0.92,  # space for legend or vertical colorbar
-    bottom=0.25,  # space for supxlabel
-    top=0.85,  # space for suptitle
-    hspace=0.4,  # vertical spacing between rows
-    wspace=0.3  # horizontal spacing between columns
-)
-handles, labels = axes[0].get_legend_handles_labels()
-by_label = dict(zip(labels, handles))  # removes duplicates
-fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=16)
-# Adjust spacing to make room for colorbar at the bottom
-
-# Create a new axis for the horizontal colorbar that spans the full width
-plt.savefig('future_intensity_change_ALEP_mannwhitney.png')
-plt.close()
+    plt.savefig("intensity_combined.png", dpi=300, bbox_inches="tight")
+    plt.close()

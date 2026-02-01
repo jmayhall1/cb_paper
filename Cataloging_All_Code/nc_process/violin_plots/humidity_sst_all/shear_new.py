@@ -45,15 +45,30 @@ def group_func(data: list, group_labels: list):
     :param group_labels: list of group identifiers
     :return: (grouped_data, grouped_labels)
     """
+    sorted_pairs = sorted(zip(group_labels, data))
+    group_labels, data = zip(*sorted_pairs)
+    group_labels = list(group_labels)
+    data = list(data)
+
+    grouped_l1 = defaultdict(list)
     grouped_l2 = defaultdict(list)
-    for label, value in zip(group_labels, data):
-        grouped_l2[label].append((value / (1024 * 1024)) * 100)
 
-    keys = sorted(grouped_l2.keys())
-    grouped_data = [grouped_l2[k] for k in keys]
-    grouped_labels = [[k] * len(grouped_l2[k]) for k in keys]
+    for val1, val2 in zip(group_labels, data):
+        grouped_l1[val1].append(val1)
+        grouped_l2[val1].append(val2)
 
-    return grouped_data, grouped_labels
+    # Sortby unique keys from list1 to keep order consistent
+    keys = sorted(grouped_l1.keys())
+    group_labels = [grouped_l1[k] for k in keys]
+    data = [grouped_l2[k] for k in keys]
+
+    # Create nested list from grouped values
+    final_data = []
+    for d in data:
+        final_data.append([(num / (1024 * 1024)) * 100 for num in d])
+        flat = [item for sublist in final_data for item in sublist]
+
+    return final_data, group_labels
 
 
 def compute_pval_grid(data: list):
@@ -89,8 +104,8 @@ def plot_violin_2panel(data1, labels1, data2, labels2, suptitle, xlabel, ylabel,
                 bins[binned_lab].append(val)
 
         # --- Prepare violin data ---
-        violin_positions = np.array(sorted(bins.keys()), dtype=float)
-        violin_data = [np.asarray(bins[bc], dtype=float) for bc in violin_positions]
+        violin_data = [bins[bc] for bc in bin_centers if bc in bins]
+        violin_positions = [bc for bc in bin_centers if bc in bins]
 
         # Compute quartiles and whiskers for each group manually
         quartile1, medians, quartile3 = [], [], []
