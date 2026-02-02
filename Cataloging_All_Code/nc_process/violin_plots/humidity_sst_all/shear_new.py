@@ -112,6 +112,7 @@ def plot_violin_2panel(data1, labels1, data2, labels2, suptitle, xlabel, ylabel,
         whiskers_min, whiskers_max = [], []
 
         for group in violin_data:
+            group = np.asarray(group, dtype=float)
             group = group[np.isfinite(group)]
 
             if group.size == 0:
@@ -313,8 +314,8 @@ def plot_rh_violin_ax(ax, data, labels, title, rh_lims):
         pc.set_alpha(1)
 
     ax.scatter(violin_positions, medians, color='blue', s=80, zorder=3)
-    ax.vlines(violin_positions, quartile1, quartile3, color='k', lw=10)
-    ax.vlines(violin_positions, whiskers_min, whiskers_max, color='k', lw=4)
+    ax.vlines(violin_positions, quartile1, quartile3, color='k', lw=6)
+    ax.vlines(violin_positions, whiskers_min, whiskers_max, color='k', lw=2)
     ax.tick_params(axis='both', labelsize=18)
 
     # --- Sample size labels ---
@@ -338,7 +339,7 @@ def plot_rh_violin_ax(ax, data, labels, title, rh_lims):
             zorder=5
         )
 
-    ax.set_xlim((start - 2, end + 2))
+    ax.set_xlim((start - 5, end + 4))
     ax.set_xticks(range(start, end, step))
     ax.set_ylim((0, 60))
     ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
@@ -423,7 +424,7 @@ if __name__ == '__main__':
 
     # Collect results in parallel
     results = defaultdict(list)
-    with Pool(24, initializer=init_worker) as pool:
+    with Pool(12, initializer=init_worker) as pool:
         for res in pool.map(mp_running, needed_args):
             if res is None:
                 continue

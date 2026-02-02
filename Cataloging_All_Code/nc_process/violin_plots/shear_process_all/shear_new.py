@@ -116,7 +116,7 @@ def plot_violin_2panel_diurnal(data1, labels1, data2, labels2, suptitle, xlabel,
         bins = defaultdict(list)
         for group, label_group in zip(data, labels):
             for val, hr in zip(group, label_group):
-                binned_hr = (3 * (hr // 3)) % 24  # ensures 24 → 0 bin
+                binned_hr = (3 * np.round(hr / 3)) % 24  # ensures 24 → 0 bin
                 bins[binned_hr].append(val)
 
         # --- Prepare violin data ---
@@ -128,6 +128,7 @@ def plot_violin_2panel_diurnal(data1, labels1, data2, labels2, suptitle, xlabel,
         whiskers_min, whiskers_max = [], []
 
         for group in violin_data:
+            group = np.asarray(group, dtype=float)
             group = group[np.isfinite(group)]
 
             if group.size == 0:
@@ -210,8 +211,8 @@ def plot_contourf_2panel_diurnal(data1: list, labels1: list, data2: list, labels
         for group, label_group in zip(data, labels):
             for val, (x_hr, y_hr) in zip(group, zip(label_group, label_group)):
                 # Wrap 24 -> 0
-                x_bin = (int(x_hr) % 24) // 3 * 3
-                y_bin = (int(y_hr) % 24) // 3 * 3
+                x_bin = (3 * np.round(x_hr / 3)) % 24
+                y_bin = (3 * np.round(y_hr / 3)) % 24
                 bins[(x_bin, y_bin)].append(val)
 
         bin_centers = list(range(0, 24, 3))
@@ -306,6 +307,7 @@ def plot_violin_2panel_intensity(data1, labels1, data2, labels2, suptitle, xlabe
         whiskers_min, whiskers_max = [], []
 
         for group in violin_data:
+            group = np.asarray(group, dtype=float)
             group = group[np.isfinite(group)]
 
             if group.size == 0:
@@ -582,7 +584,7 @@ if __name__ == '__main__':
     }
 
     # Parallel processing
-    with Pool(24, initializer=init_worker) as pool:
+    with Pool(12, initializer=init_worker) as pool:
         for result in pool.map(mp_running, needed_args):
             if result is None:
                 continue
