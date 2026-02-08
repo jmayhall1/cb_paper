@@ -111,24 +111,29 @@ def plotting(num, file, length, prob_ticks, cutoff, plot):
         predict = predict.astype(np.float32).round(4)
         lat = lat.astype(np.float32).round(4)
         lon = lon.astype(np.float32).round(4)
+        print('Setup complete')
+
 
         # ---- Save to a temporary .npz in memory, not on disk ----
-        buffer = io.BytesIO()
-        np.savez(buffer, probability=predict, lat=lat, lon=lon)
-        raw_npz = buffer.getvalue()
+        if plot==0 or plot==3:
+            print('Running plot = 0')
+            buffer = io.BytesIO()
+            np.savez(buffer, probability=predict, lat=lat, lon=lon)
+            raw_npz = buffer.getvalue()
 
-        # ---- Compress with zstd (no pickle!) ----
-        cctx = zstd.ZstdCompressor(level=22)
+            # ---- Compress with zstd (no pickle!) ----
+            cctx = zstd.ZstdCompressor(level=22)
 
-        out_path = (
-            f'/rstor/jmayhall/cataloging/nc_process/shear_distrubution_and_model/tcb_probs/'
-            f'{storm_id}_{date}_{time}_probs.zst'
-        )
+            out_path = (
+                f'/rstor/jmayhall/cataloging/nc_process/shear_distrubution_and_model/tcb_probs/'
+                f'{storm_id}_{date}_{time}_probs.zst'
+            )
 
-        with open(out_path, 'wb') as f:
-            f.write(cctx.compress(raw_npz))
+            with open(out_path, 'wb') as f:
+                f.write(cctx.compress(raw_npz))
 
-        if plot:
+        elif plot==1 or plot==3:
+            print('Running plot = 1')
             predict = None
             while predict is None:
                 try:
@@ -171,10 +176,54 @@ def plotting(num, file, length, prob_ticks, cutoff, plot):
             plt.savefig(f"model_prediction_{storm_id}_{date}_{time}.jpg", dpi=100)
             plt.close()
             lock.release()
-        else:
-            del (predict, lat, lon, x_test, x_test8, c8_file, c13_unscaled_file,
-                 latlon_file, storm_id, date, time, filename)
-            gc.collect()
+        elif plot==2:
+            print('Running plot = 2')
+            x_unscaled = np.load(f'{c13_unscaled_file}C13_unscaled_cut.npz')["brightness"].astype(np.float32)
+            # Setup plot
+            fig, ax = plt.subplots(1, 1, figsize=(9, 7))
+            extent = [np.nanmin(lon), np.nanmax(lon), np.nanmin(lat), np.nanmax(lat)]
+            im = ax.imshow(x_unscaled, cmap='Greys', extent=extent, aspect='auto')
+
+            # Titles & axes
+            ax.tick_params(axis='x', labelsize=16)
+            ax.tick_params(axis='y', labelsize=16)
+            ax.set_xlabel('Longitude', fontsize=16)
+            ax.set_ylabel('Latitude', fontsize=16)
+            print('Setting axes')
+
+            # Reserve space at bottom
+            fig.subplots_adjust(bottom=0.15)  # Move axes up to make room
+            cbar1 = fig.colorbar(im, orientation='horizontal', fraction=0.05, pad=0.15)
+            cbar1.ax.tick_params(labelsize=16)
+            cbar1.set_label('Brightness Temperatures (\N{degree sign}C)', fontsize=16)
+            print('Setting colorbar')
+
+            # Figure title
+            formatted_date = datetime.datetime.strptime(str(date), '%Y%m%d').strftime('%b %d, %Y')
+            formatted_time = datetime.datetime.strptime(str(time), '%H%M').strftime('%H:%M UTC')
+            if storm_id == 'AL012022':
+                fig.suptitle(f"TC Alex ({storm_id}) on {formatted_date} at {formatted_time}", y=0.95,
+                             fontsize=20)
+            elif storm_id == 'AL132023':
+                fig.suptitle(f"TC Lee ({storm_id}) on {formatted_date} at {formatted_time}", y=0.95,
+                             fontsize=20)
+            elif storm_id == 'AL202019':
+                fig.suptitle(f"TC Sebastian ({storm_id}) on {formatted_date} at {formatted_time}", y=0.95,
+                             fontsize=20)
+            else:
+                fig.suptitle(f"TC {storm_id} on {formatted_date} at {formatted_time}", y=0.95,
+                             fontsize=20)
+            print('Setting title')
+
+            # Save figure
+            lock.acquire()
+            print('Saving File')
+            plt.savefig(f"model_prediction_{storm_id}_{date}_{time}.jpg", dpi=100)
+            plt.close()
+            lock.release()
+        del (predict, lat, lon, x_test, x_test8, c8_file, c13_unscaled_file,
+             latlon_file, storm_id, date, time, filename)
+        gc.collect()
 
     except EOFError:
         print(f'EOFError encountered. File: {file}, Filename slice: {file[:-18]}')

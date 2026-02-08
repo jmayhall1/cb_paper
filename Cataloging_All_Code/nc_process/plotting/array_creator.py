@@ -30,6 +30,7 @@ if __name__ == '__main__':
     c13_scaled_dir = scale_dir / "C13_scaled"
     c08_scaled_dir = scale_dir / "C08_scaled"
     c13_unscaled_dir = scale_dir / "C13_unscaled"
+    c08_unscaled_dir = scale_dir / "C08_unscaled"
 
     c13_scaler_path = Path("data_scaler13.save")
     c08_scaler_path = Path("data_scaler8.save")
@@ -71,7 +72,7 @@ if __name__ == '__main__':
         "cmi_nc": p,
         "scaled_npz_dir": c08_scaled_dir,
         "scaler_path": c08_scaler_path,
-        "unscaled_npz_dir": None,  # channel 8 doesn’t use unscaled npz
+        "unscaled_npz_dir": c08_unscaled_dir,
     } for p in not_done_8]
 
     # -------------------

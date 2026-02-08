@@ -22,7 +22,7 @@ if __name__ == "__main__":
         "c13_scaled_path": "/rstor/jmayhall/cataloging/nc_process/geojson_transform/completed_arrays/C13_scaled/*",
         "c13_unscaled_path": "/rstor/jmayhall/cataloging/nc_process/geojson_transform/completed_arrays/C13_unscaled/*",
         "dataframe_path": "/rstor/jmayhall/cataloging/hurdat_update_interp.txt",
-        "plot": False
+        "plot": 0  # 0 for compressed predict arrays, 1 for plotted arrays, 2 for only C13 plot, 3 for both 0 and 1
     }
 
     # Log start of process

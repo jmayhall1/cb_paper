@@ -110,13 +110,19 @@ class Setup:
         temp_files = glob.glob(self.c13_scaled_path)
         c13_scaled_files = []
         for file in temp_files:
-            if not '2019' in file and not '2020' in file:
+            if 'AL202019' in file:
                 c13_scaled_files.append(file)
-        done_files = os.listdir('/rstor/jmayhall/cataloging/nc_process/shear_distrubution_and_model/tcb_probs/')
+        try:
+            done_files = os.listdir('/rstor/jmayhall/cataloging/nc_process/shear_distrubution_and_model/tcb_probs/')
+        except FileNotFoundError:
+            done_files = []
         for file in done_files:
             s_id, s_date, s_time = file[:8], file[9: 17], file[18:22]
             check_file = f'{os.path.dirname(c13_scaled_files[0])}/{s_id}_{s_date}_{s_time}_C13_scaled_cut.npz'
-            c13_scaled_files.remove(check_file)
+            try:
+                c13_scaled_files.remove(check_file)
+            except ValueError:
+                continue
 
         # Define probability ticks for thresholding
         prob_ticks = [0.02, 0.2, 0.4, 0.6, 0.8, 1.0]

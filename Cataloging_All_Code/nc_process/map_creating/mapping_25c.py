@@ -36,7 +36,7 @@ def extract_tc_25c_points(ships_df: pd.DataFrame, npz_files: list, target_sst: f
     Extract TC points that are currently, previously, or next 24 hours over ~25°C SST.
     Returns lists of latitudes, longitudes, and wind speeds.
     """
-    lats, lons, winds = [], [], []
+    lats, lons, winds, id_list = [], [], [], []
     valid_ids = set(ships_df.atcf_id)
 
     for file in npz_files:
@@ -58,6 +58,7 @@ def extract_tc_25c_points(ships_df: pd.DataFrame, npz_files: list, target_sst: f
                 lats.append(row.center_lat.values[0])
                 lons.append(row.center_lon.values[0])
                 winds.append(row.max_winds.values[0])
+                id_list.append(atcf_id)
 
                 # Check past and future 24 hours
                 for delta in range(1, hours_range + 1):
@@ -68,7 +69,7 @@ def extract_tc_25c_points(ships_df: pd.DataFrame, npz_files: list, target_sst: f
                             lats.append(new_row.center_lat.values[0])
                             lons.append(new_row.center_lon.values[0])
                             winds.append(new_row.max_winds.values[0])
-
+    print(np.unique(np.array(id_list)))
     return lats, lons, winds
 
 
@@ -119,10 +120,21 @@ def plot_tc_25c(categories: dict, extent: tuple = (35.1, -0.1, -145.1, -14.9), o
     gl.yformatter = LATITUDE_FORMATTER
 
     # Plot TCs by category
-    ax.scatter(*categories['TD'][1], *categories['TD'][0], color='yellow', s=10, label='TD')
-    ax.scatter(*categories['TS'][1], *categories['TS'][0], color='orange', s=10, label='TS')
-    ax.scatter(*categories['CAT12'][1], *categories['CAT12'][0], color='red', s=10, label='CAT 1-2')
-    ax.scatter(*categories['CAT35'][1], *categories['CAT35'][0], color='magenta', s=10, label='CAT 3-5')
+    ax.scatter(categories['TD'][1], categories['TD'][0],
+               transform=ccrs.PlateCarree(),
+               color='yellow', s=10, label='TD')
+
+    ax.scatter(categories['TS'][1], categories['TS'][0],
+               transform=ccrs.PlateCarree(),
+               color='orange', s=10, label='TS')
+
+    ax.scatter(categories['CAT12'][1], categories['CAT12'][0],
+               transform=ccrs.PlateCarree(),
+               color='red', s=10, label='CAT 1–2')
+
+    ax.scatter(categories['CAT35'][1], categories['CAT35'][0],
+               transform=ccrs.PlateCarree(),
+               color='magenta', s=10, label='CAT 3–5')
 
     ax.set_title(
         'Training, Validation, and Analysis Cases\nAtlantic & East Pacific TC Images\n'

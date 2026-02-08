@@ -153,18 +153,18 @@ needed_args = [{
 results = {
     'diurnal_pixel': [], 'diurnal_count': [],
     'intensity_pixel': [], 'intensity_count': [],
-    'wind_change': {f'{h:+}': {'pixel': [], 'count': []} for h in [-24, -18, -12, -6, 6, 12, 18, 24]},
+    'wind_change': {f'{h:+}': {'pixel': [], 'count': []} for h in [-24, 24]},
     'id_list': []
 }
 
-with Pool(24, initializer=init_worker) as pool:
+with Pool(12, initializer=init_worker) as pool:
     for result in pool.map(mp_running, needed_args):
         if result is None:
             continue
 
         wind_change_counts, pixels, atcf_id = result
 
-        for h, wind_change in zip([-24, -18, -12, -6, 6, 12, 18, 24], wind_change_counts):
+        for h, wind_change in zip([-24, 24], wind_change_counts):
             if wind_change is not None:
                 rounded_wind = int(np.round(wind_change / 20) * 20)
             else:
@@ -175,9 +175,9 @@ with Pool(24, initializer=init_worker) as pool:
         results['id_list'].append(atcf_id)
 
 # Initialize new dictionaries for AL and EP
-results_AL = {'wind_change': {f'{h:+}': {'pixel': [], 'count': []} for h in [-24, -18, -12, -6, 6, 12, 18, 24]}, 'id_list': []}
+results_AL = {'wind_change': {f'{h:+}': {'pixel': [], 'count': []} for h in [-24, 24]}, 'id_list': []}
 
-results_EP = {'wind_change': {f'{h:+}': {'pixel': [], 'count': []} for h in [-24, -18, -12, -6, 6, 12, 18, 24]}, 'id_list': []}
+results_EP = {'wind_change': {f'{h:+}': {'pixel': [], 'count': []} for h in [-24, 24]}, 'id_list': []}
 
 for idx, storm_id in enumerate(results['id_list']):
     if 'AL' in storm_id:
@@ -198,7 +198,7 @@ for h in results['wind_change']:
         clean_func(results_EP['wind_change'][h]['pixel'], results_EP['wind_change'][h]['count']))
 
 # =========== Plot: Wind Change (Past) ============
-past_hours = [-6, -12, -18, -24]
+past_hours = [-24]
 data_list = ([group_func(results_AL['wind_change'][f'{h:+}']['pixel'],
                          results_AL['wind_change'][f'{h:+}']['count'])[0] for h in past_hours] +
              [group_func(results_EP['wind_change'][f'{h:+}']['pixel'],
@@ -209,18 +209,12 @@ x_labels = ([group_func(results_AL['wind_change'][f'{h:+}']['pixel'],
                         results_EP['wind_change'][f'{h:+}']['count'])[1] for h in past_hours])
 labels_list = [f"{h}hr" for h in past_hours] + [f"{h}hr" for h in past_hours]
 
-fig, axes = plt.subplots(4, 2, figsize=(18, 14))
+fig, axes = plt.subplots(1, 2, figsize=(16, 8))
 fig.suptitle('TCB Occurrences vs Previous TC Intensity Change',
              fontsize=24)
 fig.supxlabel(r'TC Wind Speed Change ($\frac{{dv}}{{dt}}$, $\frac{kt}{hr}$)', fontsize=24)
 fig.supylabel('Percentage of Pixels with TCBs', fontsize=24)
-rows, cols = axes.shape
-
-# Flatten axes in column-major order (top half first column, bottom half second column)
-axes_col_major = [axes[r, c] for c in range(cols) for r in range(rows)]
-
-# Loop with enumerate and tuple unpacking
-for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, labels_list, x_labels)):
+for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, labels_list, x_labels)):
     labels = np.unique(np.concatenate([np.array(sublist) for sublist in labels]))
     ax.tick_params(axis='both', labelsize=16)
     parts = ax.violinplot(data, positions=labels, showmeans=False, showmedians=False, showextrema=False, widths=8)
@@ -277,7 +271,7 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
     ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
     ax.axvline(x=-20, color='blue', linestyle='--', lw=2, label='RW Transition')
     ax.axvline(x=30, color='magenta', linestyle='--', lw=2, label='RI Transition')
-    if z < 4:
+    if z == 0:
         ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours (Atlantic)', fontsize=16)
     else:
         ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours (Eastern Pacific)', fontsize=16)
@@ -286,30 +280,24 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
 fig.subplots_adjust(
     left=0.07,  # space for ylabel
     right=0.92,  # space for legend or vertical colorbar
-    bottom=0.1,  # space for supxlabel
-    top=0.9,  # space for suptitle
+    bottom=0.15,  # space for supxlabel
+    top=0.88,  # space for suptitle
     hspace=0.4,  # vertical spacing between rows
-    wspace=0.15  # horizontal spacing between columns
+    wspace=0.3  # horizontal spacing between columns
 )
 handles, labels = ax.get_legend_handles_labels()
-legend = fig.legend(handles, labels, loc='upper right', fontsize=20)
+legend = fig.legend(handles, labels, loc='upper right', fontsize=12)
 legend.set_alpha(0.4)
-plt.savefig('prev_intensity_change_ALEP.png', bbox_inches='tight')
+plt.savefig('prev_intensity_change_ALEP.png')
 plt.close()
 
-fig, axes = plt.subplots(4, 2, figsize=(18, 14))
-fig.suptitle('Previous TC Intensity Change Mann-Whitney P-Values', fontsize=24)
-fig.supxlabel(r'TC Wind Speed Change ($\frac{dv}{dt}$, $\frac{kt}{hr}$)', fontsize=24)
-fig.supylabel(r'TC Wind Speed Change ($\frac{dv}{dt}$, $\frac{kt}{hr}$)', fontsize=24)
+fig, axes = plt.subplots(1, 2, figsize=(16, 8))
+fig.suptitle('Previous TC Intensity Change Mann-Whitney P-Values', fontsize=24, y=0.95)
+fig.supxlabel(r'TC Wind Speed Change ($\frac{dv}{dt}$, $\frac{kt}{hr}$)', fontsize=24, y=0.07)
+fig.supylabel(r'TC Wind Speed Change ($\frac{dv}{dt}$, $\frac{kt}{hr}$)', fontsize=24, x=0.05)
 
 # Loop through each subplot
-rows, cols = axes.shape
-
-# Flatten axes in column-major order (top half first column, bottom half second column)
-axes_col_major = [axes[r, c] for c in range(cols) for r in range(rows)]
-
-# Loop with enumerate and tuple unpacking
-for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, labels_list, x_labels)):
+for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, labels_list, x_labels)):
     labels = np.unique(np.concatenate([np.array(sublist) for sublist in labels]))
 
     # Compute p-value matrix
@@ -329,20 +317,20 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
     ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=14)
     ax.set_yticklabels(labels, fontsize=14)
     if '6' in label:
-        ax.set_xlim((-70, 50))
-        ax.set_ylim((-70, 50))
+        ax.set_xlim((-65, 45))
+        ax.set_ylim((-65, 45))
         tick_marks = range(-60, 41, 20)
     elif '12' in label:
-        ax.set_xlim((-110, 70))
-        ax.set_ylim((-110, 70))
+        ax.set_xlim((-105, 65))
+        ax.set_ylim((-105, 65))
         tick_marks = range(-100, 61, 20)
     elif '18' in label:
-        ax.set_xlim((-90, 90))
-        ax.set_ylim((-90, 90))
+        ax.set_xlim((-85, 85))
+        ax.set_ylim((-85, 85))
         tick_marks = range(-80, 81, 20)
     elif '24' in label:
-        ax.set_xlim((-110, 110))
-        ax.set_ylim((-110, 110))
+        ax.set_xlim((-105, 105))
+        ax.set_ylim((-105, 105))
         tick_marks = range(-100, 101, 20)
     ax.set_xticks(tick_marks)
     ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
@@ -352,31 +340,29 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
     plt.setp(ax.get_yticklabels())
     ax.set_title(f'{label}', fontsize=16)
     ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
-    if z < 4:
+    if z == 0:
         ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours (Atlantic)', fontsize=16)
     else:
         ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours (Eastern Pacific)', fontsize=16)
 
 # Add colorbar
 fig.subplots_adjust(
-    left=0.07,  # space for ylabel
+    left=0.12,  # space for ylabel
     right=0.92,  # space for legend or vertical colorbar
-    bottom=0.1,  # space for supxlabel
-    top=0.9,  # space for suptitle
-    hspace=0.4,  # vertical spacing between rows
-    wspace=0.15  # horizontal spacing between columns
+    bottom=0.25,  # space for supxlabel
+    top=0.85,  # space for suptitle
 )
-handles, labels = axes[0, 0].get_legend_handles_labels()
+handles, labels = axes[0].get_legend_handles_labels()
 by_label = dict(zip(labels, handles))  # removes duplicates
-fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=20)
+fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=16)
 # Adjust spacing to make room for colorbar at the bottom
 
 # Create a new axis for the horizontal colorbar that spans the full width
-plt.savefig('prev_intensity_change_ALEP_mannwhitney.png', bbox_inches='tight')
+plt.savefig('prev_intensity_change_ALEP_mannwhitney.png')
 plt.close()
 
 # =========== Plot: Wind Change (Future) ==========
-future_hours = [6, 12, 18, 24]
+future_hours = [24]
 data_list = ([group_func(results_AL['wind_change'][f'{h:+}']['pixel'],
                          results_AL['wind_change'][f'{h:+}']['count'])[0] for h in future_hours] +
              [group_func(results_EP['wind_change'][f'{h:+}']['pixel'],
@@ -387,18 +373,12 @@ x_labels = ([group_func(results_AL['wind_change'][f'{h:+}']['pixel'],
                         results_EP['wind_change'][f'{h:+}']['count'])[1] for h in future_hours])
 labels_list = [f"{h}hr" for h in future_hours] + [f"{h}hr" for h in future_hours]
 
-fig, axes = plt.subplots(4, 2, figsize=(18, 14))
+fig, axes = plt.subplots(1, 2, figsize=(16, 8))
 fig.suptitle('TCB Occurrences vs Future TC Intensity Change',
              fontsize=24)
 fig.supxlabel(r'TC Wind Speed Change ($\frac{{dv}}{{dt}}$, $\frac{kt}{hr}$)', fontsize=24)
 fig.supylabel('Percentage of Pixels with TCBs', fontsize=24)
-rows, cols = axes.shape
-
-# Flatten axes in column-major order (top half first column, bottom half second column)
-axes_col_major = [axes[r, c] for c in range(cols) for r in range(rows)]
-
-# Loop with enumerate and tuple unpacking
-for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, labels_list, x_labels)):
+for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, labels_list, x_labels)):
     labels = np.unique(np.concatenate([np.array(sublist) for sublist in labels]))
     ax.tick_params(axis='both', labelsize=16)
     parts = ax.violinplot(data, positions=labels, showmeans=False, showmedians=False, showextrema=False, widths=8)
@@ -455,7 +435,7 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
     ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
     ax.axvline(x=-20, color='blue', linestyle='--', lw=2, label='RW Transition')
     ax.axvline(x=30, color='magenta', linestyle='--', lw=2, label='RI Transition')
-    if z < 4:
+    if z == 0:
         ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours (Atlantic)', fontsize=16)
     else:
         ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours (Eastern Pacific)', fontsize=16)
@@ -464,30 +444,24 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
 fig.subplots_adjust(
     left=0.07,  # space for ylabel
     right=0.92,  # space for legend or vertical colorbar
-    bottom=0.1,  # space for supxlabel
-    top=0.9,  # space for suptitle
+    bottom=0.15,  # space for supxlabel
+    top=0.88,  # space for suptitle
     hspace=0.4,  # vertical spacing between rows
-    wspace=0.15  # horizontal spacing between columns
+    wspace=0.3  # horizontal spacing between columns
 )
 handles, labels = ax.get_legend_handles_labels()
-legend = fig.legend(handles, labels, loc='upper right', fontsize=20)
+legend = fig.legend(handles, labels, loc='upper right', fontsize=12)
 legend.set_alpha(0.4)
-plt.savefig('future_intensity_change_ALEP.png', bbox_inches='tight')
+plt.savefig('future_intensity_change_ALEP.png')
 plt.close()
 
-fig, axes = plt.subplots(4, 2, figsize=(18, 14))
-fig.suptitle('Future TC Intensity Change Mann-Whitney P-Values', fontsize=24)
-fig.supxlabel(r'TC Wind Speed Change ($\frac{dv}{dt}$, $\frac{kt}{hr}$)', fontsize=24)
-fig.supylabel(r'TC Wind Speed Change ($\frac{dv}{dt}$, $\frac{kt}{hr}$)', fontsize=24)
+fig, axes = plt.subplots(1, 2, figsize=(16, 8))
+fig.suptitle('Future TC Intensity Change Mann-Whitney P-Values', fontsize=24, y=0.95)
+fig.supxlabel(r'TC Wind Speed Change ($\frac{dv}{dt}$, $\frac{kt}{hr}$)', fontsize=24, y=0.12)
+fig.supylabel(r'TC Wind Speed Change ($\frac{dv}{dt}$, $\frac{kt}{hr}$)', fontsize=24, x=0.05)
 
 # Loop through each subplot
-rows, cols = axes.shape
-
-# Flatten axes in column-major order (top half first column, bottom half second column)
-axes_col_major = [axes[r, c] for c in range(cols) for r in range(rows)]
-
-# Loop with enumerate and tuple unpacking
-for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, labels_list, x_labels)):
+for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, labels_list, x_labels)):
     labels = np.unique(np.concatenate([np.array(sublist) for sublist in labels]))
 
     # Compute p-value matrix
@@ -508,20 +482,20 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
     ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=14)
     ax.set_yticklabels(labels, fontsize=14)
     if '6' in label:
-        ax.set_xlim((-70, 50))
-        ax.set_ylim((-70, 50))
+        ax.set_xlim((-65, 45))
+        ax.set_ylim((-65, 45))
         tick_marks = range(-60, 41, 20)
     elif '12' in label:
-        ax.set_xlim((-110, 70))
-        ax.set_ylim((-110, 70))
+        ax.set_xlim((-105, 65))
+        ax.set_ylim((-105, 65))
         tick_marks = range(-100, 61, 20)
     elif '18' in label:
-        ax.set_xlim((-110, 90))
-        ax.set_ylim((-110, 90))
+        ax.set_xlim((-105, 85))
+        ax.set_ylim((-105, 85))
         tick_marks = range(-100, 81, 20)
     elif '24' in label:
-        ax.set_xlim((-130, 110))
-        ax.set_ylim((-130, 110))
+        ax.set_xlim((-125, 105))
+        ax.set_ylim((-125, 105))
         tick_marks = range(-120, 101, 20)
     ax.set_xticks(tick_marks)
     ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
@@ -531,7 +505,7 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
     plt.setp(ax.get_yticklabels())
     ax.set_title(f'{label}', fontsize=16)
     ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
-    if z < 4:
+    if z == 0:
         ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours (Atlantic)', fontsize=16)
     else:
         ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours (Eastern Pacific)', fontsize=16)
@@ -539,18 +513,18 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
 # Add colorbar
 # Adjust spacing to make room for colorbar at the bottom
 fig.subplots_adjust(
-    left=0.07,  # space for ylabel
+    left=0.12,  # space for ylabel
     right=0.92,  # space for legend or vertical colorbar
-    bottom=0.1,  # space for supxlabel
-    top=0.9,  # space for suptitle
+    bottom=0.25,  # space for supxlabel
+    top=0.85,  # space for suptitle
     hspace=0.4,  # vertical spacing between rows
-    wspace=0.15  # horizontal spacing between columns
+    wspace=0.3  # horizontal spacing between columns
 )
-handles, labels = axes[0, 0].get_legend_handles_labels()
+handles, labels = axes[0].get_legend_handles_labels()
 by_label = dict(zip(labels, handles))  # removes duplicates
-fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=20)
+fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=16)
 # Adjust spacing to make room for colorbar at the bottom
 
 # Create a new axis for the horizontal colorbar that spans the full width
-plt.savefig('future_intensity_change_ALEP_mannwhitney.png', bbox_inches='tight')
+plt.savefig('future_intensity_change_ALEP_mannwhitney.png')
 plt.close()

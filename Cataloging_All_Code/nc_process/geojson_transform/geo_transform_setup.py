@@ -11,6 +11,7 @@ Uses multiprocessing for efficiency.
 
 from multiprocessing import Pool
 
+import numpy as np
 import pandas as pd
 from nearest_point import mp_geo
 from shapely.geometry import Point
