@@ -5,27 +5,17 @@ Last Edited: 07/10/2025
 Purpose: Identify transverse bands in TC quadrants based on shear vector.
 """
 import glob
+from multiprocessing import Pool
+
 import matplotlib as mpl
 import matplotlib.patheffects as path_effects
 import matplotlib.pyplot as plt
 import numpy as np
-import os
 import pandas as pd
-from collections import defaultdict
 from matplotlib.cm import ScalarMappable
 from matplotlib.ticker import FuncFormatter
-from multiprocessing import Pool
 from scipy.stats import mannwhitneyu
 from shear_multi import mp_running, init_worker
-
-
-def label_every_10(x, pos):
-    """
-    Function for creating labels every 10 points.
-    :param x: Tick marks
-    :return: Tick labels
-    """
-    return f"{int(x)}" if x % 10 == 0 else ''
 
 
 def label_every_20(x, pos):
@@ -37,39 +27,27 @@ def label_every_20(x, pos):
     return f"{int(x)}" if x % 20 == 0 else ''
 
 
-def group_func(data: list, group_labels: list) -> list:
+def group_func(data: list, group_labels: list):
     """
-    Function for grouping data and labels in nested lists.
-    :param data: Data to be grouped
-    :param group_labels: Grouping labels
-    :return: Two nested lists of grouped data and labels
+    Group pixel data by rounded intensity change bins.
+
+    Converts raw pixel counts to percentage of domain (1024x1024).
+    Returns:
+        grouped_data : list of lists (pixel % per bin)
+        grouped_labels : list of lists (bin labels)
     """
-    sorted_pairs = sorted(zip(group_labels, data))
-    group_labels, data = zip(*sorted_pairs)
-    group_labels = list(group_labels)
-    data = list(data)
+    df = pd.DataFrame({
+        "label": group_labels,
+        "data": data
+    }).dropna()
 
-    grouped_l1 = defaultdict(list)
-    grouped_l2 = defaultdict(list)
+    # Convert to % once (vectorized)
+    df["data"] = (df["data"] / (1024 * 1024)) * 100
 
-    for val1, val2 in zip(group_labels, data):
-        grouped_l1[val1].append(val1)
-        grouped_l2[val1].append(val2)
+    grouped = df.groupby("label")["data"].apply(list).sort_index()
 
-    # Sortby unique keys from list1 to keep order consistent
-    keys = sorted(grouped_l1.keys())
-    group_labels = [grouped_l1[k] for k in keys]
-    data = [grouped_l2[k] for k in keys]
+    return grouped.tolist(), [[k] * len(v) for k, v in grouped.items()]
 
-    # Create nested list from grouped values
-    final_data = []
-    for d in data:
-        final_data.append([(num / (1024 * 1024)) * 100 for num in d])
-        flat = [item for sublist in final_data for item in sublist]
-        if np.max(flat) > 60:
-            print(f'High final data: {final_data}')
-
-    return final_data, group_labels
 
 
 def adjacent_values(sorted_array, q1, q3):
@@ -81,18 +59,20 @@ def adjacent_values(sorted_array, q1, q3):
     lower = min([x for x in sorted_array if x >= lower_adj], default=q1)
     return lower, upper
 
-def compute_pval_grid(data: list) -> np.array:
+def compute_pval_grid(data: list) -> np.ndarray:
     """
-    Compute pairwise Mann-Whitney p-values between data groups.
-    :param data: Data to be tested.
-    :return: P-values
+    Compute symmetric Mann-Whitney U p-value matrix.
+    Only computes upper triangle and mirrors.
     """
     n = len(data)
     p_grid = np.full((n, n), np.nan)
+
     for i in range(n):
-        for j in range(n):
+        for j in range(i, n):
             _, p = mannwhitneyu(data[i], data[j], alternative='two-sided')
             p_grid[i, j] = p
+            p_grid[j, i] = p
+
     return p_grid
 
 

@@ -14,78 +14,31 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.cm import ScalarMappable
-from matplotlib.ticker import FuncFormatter
 from scipy.stats import mannwhitneyu
 from shear_multi import mp_running, init_worker
 
 
-# ----------------------------
-# Axis labeling functions
-# ----------------------------
-def label_every_10(x, pos):
-    """Return tick label every 10 units."""
-    _ = pos  # Adding dummy variable to ensure pos not used warning is not present.
-    return f"{int(x)}" if x % 10 == 0 else ''
-
-
-def label_every_20(x: int, pos) -> str:
+def group_func(data: list, group_labels: list):
     """
-    Tick Formatter
-    :param x: Number of ticks
-    :param pos: Position
-    :return: Tick labels
+    Group pixel data by rounded intensity change bins.
+
+    Converts raw pixel counts to percentage of domain (1024x1024).
+    Returns:
+        grouped_data : list of lists (pixel % per bin)
+        grouped_labels : list of lists (bin labels)
     """
-    _ = pos  # Adding dummy variable to ensure pos not used warning is not present.
-    """Return tick label every 20 units."""
-    return f"{int(x)}" if x % 20 == 0 else ''
+    df = pd.DataFrame({
+        "label": group_labels,
+        "data": data
+    }).dropna()
 
+    # Convert to % once (vectorized)
+    df["data"] = (df["data"] / (1024 * 1024)) * 100
 
-# ----------------------------
-# Data grouping and cleaning
-# ----------------------------
-def group_func(data: list[float], group_labels: list[int]) -> tuple[list[list[float]], list[list[int]]]:
-    """
-    Group data by labels and convert to percentage.
+    grouped = df.groupby("label")["data"].apply(list).sort_index()
 
-    :param data: Values to be grouped
-    :param group_labels: Labels corresponding to values
-    :return: Tuple of (grouped data in percent, grouped labels)
-    """
-    sorted_pairs = sorted(zip(group_labels, data))
-    group_labels, data = zip(*sorted_pairs)
-    group_labels = list(group_labels)
-    data = list(data)
+    return grouped.tolist(), [[k] * len(v) for k, v in grouped.items()]
 
-    grouped_l1 = defaultdict(list)
-    grouped_l2 = defaultdict(list)
-
-    for val1, val2 in zip(group_labels, data):
-        grouped_l1[val1].append(val1)
-        grouped_l2[val1].append(val2)
-
-    # Sortby unique keys from list1 to keep order consistent
-    keys = sorted(grouped_l1.keys())
-    group_labels = [grouped_l1[k] for k in keys]
-    data = [grouped_l2[k] for k in keys]
-
-    # Create nested list from grouped values
-    final_data = []
-    for d in data:
-        final_data.append([(num / (1024 * 1024)) * 100 for num in d])
-        flat = [item for sublist in final_data for item in sublist]
-
-    return final_data, group_labels
-
-def clean_func(list1: list, list2: list) -> tuple[list, list]:
-    """
-    Remove None values from two parallel lists.
-
-    :param list1: First list
-    :param list2: Second list
-    :return: Cleaned lists
-    """
-    valid_indices = [i for i, (v1, v2) in enumerate(zip(list1, list2)) if v1 is not None and v2 is not None]
-    return [list1[i] for i in valid_indices], [list2[i] for i in valid_indices]
 
 def fig_to_rgb(fig):
     fig.canvas.draw()
@@ -94,15 +47,75 @@ def fig_to_rgb(fig):
     return buf.reshape(h, w, 3)
 
 
-# ----------------------------
-# Violin/Box plot helpers
-# ----------------------------
 def adjacent_values(sorted_array: np.ndarray, q1: float, q3: float) -> tuple[float, float]:
     """Compute whisker limits for violin/box plots."""
     iqr = q3 - q1
     upper = min(max(sorted_array[sorted_array <= q3 + 1.5 * iqr], default=q3), max(sorted_array))
     lower = max(min(sorted_array[sorted_array >= q1 - 1.5 * iqr], default=q1), min(sorted_array))
     return lower, upper
+
+
+def compute_pval_grid(data: list) -> np.ndarray:
+    """
+    Compute symmetric Mann-Whitney U p-value matrix.
+    Only computes upper triangle and mirrors.
+    """
+    n = len(data)
+    p_grid = np.full((n, n), np.nan)
+
+    for i in range(n):
+        for j in range(i, n):
+            _, p = mannwhitneyu(data[i], data[j], alternative='two-sided')
+            p_grid[i, j] = p
+            p_grid[j, i] = p
+
+    return p_grid
+
+
+def clean_func(list1: list, list2: list) -> list:
+    """
+    Function for removing None values from list
+    :param list1: First list to be cleaned
+    :param list2: Second list to be cleaned
+    :return: The two cleaned lists
+    """
+    none_indices = ([i for i, v in enumerate(list1) if v is None] +
+                    [i for i, v in enumerate(list2) if v is None])
+
+    # Remove None values
+    cleaned_list1 = [v for i, v in enumerate(list1) if i not in none_indices]
+    cleaned_list2 = [v for i, v in enumerate(list2) if i not in none_indices]
+    return cleaned_list1, cleaned_list2
+
+def split_basin(results: dict):
+    """
+    Function to split analysis results by basin.
+    :param results: Analysis results
+    :return: Split Results
+    """
+    results_al = {k: [] for k in results}
+    results_ep = {k: [] for k in results}
+    for idx, storm_id in enumerate(results['id_list']):
+        target = results_al if 'AL' in storm_id else results_ep if 'EP' in storm_id else None
+        if target:
+            target['id_list'].append(storm_id)
+            for key in ['diurnal_pixel', 'diurnal_count', 'intensity_pixel', 'intensity_count']:
+                target[key].append(results[key][idx])
+    return results_al, results_ep
+
+
+# ================= Clean data =================
+def clean_all(results: dict) -> dict:
+    """
+    Function to run help clean function
+    :param results: Analysis results
+    :return: Cleaned analysis results
+    """
+    results['diurnal_pixel'], results['diurnal_count'] = clean_func(results['diurnal_pixel'],
+                                                                    results['diurnal_count'])
+    results['intensity_pixel'], results['intensity_count'] = clean_func(results['intensity_pixel'],
+                                                                        results['intensity_count'])
+    return results
 
 
 def plot_violin_2panel_diurnal(data1, labels1, data2, labels2, suptitle, xlabel, ylabel, filename):
@@ -466,74 +479,6 @@ def plot_contourf_2panel_intensity(data1: list, labels1: list, data2: list, labe
     fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=20, framealpha=0)
     plt.savefig(filename)
     return fig, axes
-
-
-def compute_pval_grid(grid: list[list[list[float]]]) -> np.ndarray:
-    """
-    Compute Mann-Whitney p-values for a 2D grid of lists-of-values.
-    Returns a np.array of shape (n_bins, n_bins).
-    """
-    n = len(grid)
-    pvals = np.full((n, n), np.nan)
-
-    for i in range(n):
-        for j in range(n):
-            data_i = grid[i]
-            data_j = grid[j]
-            # flatten row into single list of values
-            vals_i = [v for cell in data_i for v in (cell if isinstance(cell, list) else [cell])]
-            vals_j = [v for cell in data_j for v in (cell if isinstance(cell, list) else [cell])]
-
-            if vals_i and vals_j:  # both non-empty
-                _, p = mannwhitneyu(vals_i, vals_j, alternative='two-sided')
-                pvals[i, j] = p
-    return pvals
-
-
-def clean_func(list1: list, list2: list) -> list:
-    """
-    Function for removing None values from list
-    :param list1: First list to be cleaned
-    :param list2: Second list to be cleaned
-    :return: The two cleaned lists
-    """
-    none_indices = ([i for i, v in enumerate(list1) if v is None] +
-                    [i for i, v in enumerate(list2) if v is None])
-
-    # Remove None values
-    cleaned_list1 = [v for i, v in enumerate(list1) if i not in none_indices]
-    cleaned_list2 = [v for i, v in enumerate(list2) if i not in none_indices]
-    return cleaned_list1, cleaned_list2
-
-def split_basin(results: dict):
-    """
-    Function to split analysis results by basin.
-    :param results: Analysis results
-    :return: Split Results
-    """
-    results_al = {k: [] for k in results}
-    results_ep = {k: [] for k in results}
-    for idx, storm_id in enumerate(results['id_list']):
-        target = results_al if 'AL' in storm_id else results_ep if 'EP' in storm_id else None
-        if target:
-            target['id_list'].append(storm_id)
-            for key in ['diurnal_pixel', 'diurnal_count', 'intensity_pixel', 'intensity_count']:
-                target[key].append(results[key][idx])
-    return results_al, results_ep
-
-
-# ================= Clean data =================
-def clean_all(results: dict) -> dict:
-    """
-    Function to run help clean function
-    :param results: Analysis results
-    :return: Cleaned analysis results
-    """
-    results['diurnal_pixel'], results['diurnal_count'] = clean_func(results['diurnal_pixel'],
-                                                                    results['diurnal_count'])
-    results['intensity_pixel'], results['intensity_count'] = clean_func(results['intensity_pixel'],
-                                                                        results['intensity_count'])
-    return results
 
 
 if __name__ == '__main__':

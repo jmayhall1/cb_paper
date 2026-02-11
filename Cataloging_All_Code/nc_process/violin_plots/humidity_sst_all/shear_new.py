@@ -6,26 +6,15 @@ Purpose: Identify transverse bands in TC quadrants based on shear vector,
          generate violin plots and Mann-Whitney contour plots for RH and SST.
 """
 import glob
-import matplotlib as mpl
+from collections import defaultdict
+from multiprocessing import Pool
+
 import matplotlib.patheffects as path_effects
 import matplotlib.pyplot as plt
 import numpy as np
-import os
 import pandas as pd
-from collections import defaultdict
-from matplotlib.cm import ScalarMappable
-from matplotlib.ticker import FuncFormatter
-from multiprocessing import Pool
 from scipy.stats import mannwhitneyu
 from shear_multi import mp_running, init_worker
-
-
-# ---------------- Utility Functions ---------------- #
-
-def label_every_10(x, pos):
-    """Tick formatter: show every 10th label."""
-    _ = pos  # Included to remove variable not used warning.
-    return f"{int(x)}" if x % 10 == 0 else ''
 
 
 def adjacent_values(sorted_array, q1, q3):
@@ -40,53 +29,71 @@ def adjacent_values(sorted_array, q1, q3):
 
 def group_func(data: list, group_labels: list):
     """
-    Group data by labels, convert to percentage of total pixels.
-    :param data: list of pixel counts
-    :param group_labels: list of group identifiers
-    :return: (grouped_data, grouped_labels)
+    Group pixel data by rounded intensity change bins.
+
+    Converts raw pixel counts to percentage of domain (1024x1024).
+    Returns:
+        grouped_data : list of lists (pixel % per bin)
+        grouped_labels : list of lists (bin labels)
     """
-    sorted_pairs = sorted(zip(group_labels, data))
-    group_labels, data = zip(*sorted_pairs)
-    group_labels = list(group_labels)
-    data = list(data)
+    df = pd.DataFrame({
+        "label": group_labels,
+        "data": data
+    }).dropna()
 
-    grouped_l1 = defaultdict(list)
-    grouped_l2 = defaultdict(list)
+    # Convert to % once (vectorized)
+    df["data"] = (df["data"] / (1024 * 1024)) * 100
 
-    for val1, val2 in zip(group_labels, data):
-        grouped_l1[val1].append(val1)
-        grouped_l2[val1].append(val2)
+    grouped = df.groupby("label")["data"].apply(list).sort_index()
 
-    # Sortby unique keys from list1 to keep order consistent
-    keys = sorted(grouped_l1.keys())
-    group_labels = [grouped_l1[k] for k in keys]
-    data = [grouped_l2[k] for k in keys]
+    return grouped.tolist(), [[k] * len(v) for k, v in grouped.items()]
 
-    # Create nested list from grouped values
-    final_data = []
-    for d in data:
-        final_data.append([(num / (1024 * 1024)) * 100 for num in d])
-        flat = [item for sublist in final_data for item in sublist]
-
-    return final_data, group_labels
-
-
-def compute_pval_grid(data: list):
-    """Compute pairwise Mann-Whitney p-values between data groups."""
-    n = len(data)
-    mannwhitney_type = 'two-sided'
-    p_grid = np.full((n, n), np.nan)
-    for i in range(n):
-        for j in range(n):
-            _, p = mannwhitneyu(data[i], data[j], alternative=mannwhitney_type)
-            p_grid[i, j] = p
-    return p_grid
 
 def fig_to_rgb(fig):
     fig.canvas.draw()
     w, h = fig.canvas.get_width_height()
     buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
     return buf.reshape(h, w, 3)
+
+
+def compute_pval_grid(data: list) -> np.ndarray:
+    """
+    Compute symmetric Mann-Whitney U p-value matrix.
+    Only computes upper triangle and mirrors.
+    """
+    n = len(data)
+    p_grid = np.full((n, n), np.nan)
+
+    for i in range(n):
+        for j in range(i, n):
+            _, p = mannwhitneyu(data[i], data[j], alternative='two-sided')
+            p_grid[i, j] = p
+            p_grid[j, i] = p
+
+    return p_grid
+
+
+def clean_func(list1: list, list2: list) -> list:
+    """
+    Function for removing None values from list
+    :param list1: First list to be cleaned
+    :param list2: Second list to be cleaned
+    :return: The two cleaned lists
+    """
+    none_indices = ([i for i, v in enumerate(list1) if v is None] +
+                    [i for i, v in enumerate(list2) if v is None])
+
+    # Remove None values
+    cleaned_list1 = [v for i, v in enumerate(list1) if i not in none_indices]
+    cleaned_list2 = [v for i, v in enumerate(list2) if i not in none_indices]
+    return cleaned_list1, cleaned_list2
+
+
+def prepare_rh_data(results_dict):
+    """Prepare RH data for plotting."""
+    data_list = [group_func(results_dict[f'rh{h}_pixel'], results_dict[f'rh{h}_count'])[0] for h in rh_ids]
+    labels_list = [group_func(results_dict[f'rh{h}_pixel'], results_dict[f'rh{h}_count'])[1] for h in rh_ids]
+    return data_list, labels_list
 
 
 # ---------------- Plotting Functions ---------------- #
@@ -344,51 +351,6 @@ def plot_rh_violin_ax(ax, data, labels, title, rh_lims):
     ax.set_ylim((0, 60))
     ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
     ax.set_title(title, fontsize=24)
-
-
-def compute_pval_grid(grid: list[list[list[float]]]) -> np.ndarray:
-    """
-    Compute Mann-Whitney p-values for a 2D grid of lists-of-values.
-    Returns a np.array of shape (n_bins, n_bins).
-    """
-    n = len(grid)
-    pvals = np.full((n, n), np.nan)
-
-    for i in range(n):
-        for j in range(n):
-            data_i = grid[i]
-            data_j = grid[j]
-            # flatten row into single list of values
-            vals_i = [v for cell in data_i for v in (cell if isinstance(cell, list) else [cell])]
-            vals_j = [v for cell in data_j for v in (cell if isinstance(cell, list) else [cell])]
-
-            if vals_i and vals_j:  # both non-empty
-                _, p = mannwhitneyu(vals_i, vals_j, alternative='two-sided')
-                pvals[i, j] = p
-    return pvals
-
-
-def clean_func(list1: list, list2: list) -> list:
-    """
-    Function for removing None values from list
-    :param list1: First list to be cleaned
-    :param list2: Second list to be cleaned
-    :return: The two cleaned lists
-    """
-    none_indices = ([i for i, v in enumerate(list1) if v is None] +
-                    [i for i, v in enumerate(list2) if v is None])
-
-    # Remove None values
-    cleaned_list1 = [v for i, v in enumerate(list1) if i not in none_indices]
-    cleaned_list2 = [v for i, v in enumerate(list2) if i not in none_indices]
-    return cleaned_list1, cleaned_list2
-
-
-def prepare_rh_data(results_dict):
-    """Prepare RH data for plotting."""
-    data_list = [group_func(results_dict[f'rh{h}_pixel'], results_dict[f'rh{h}_count'])[0] for h in rh_ids]
-    labels_list = [group_func(results_dict[f'rh{h}_pixel'], results_dict[f'rh{h}_count'])[1] for h in rh_ids]
-    return data_list, labels_list
 
 
 if __name__ == '__main__':
