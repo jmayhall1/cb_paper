@@ -137,7 +137,7 @@ results = {
     'id_list': []
 }
 
-with Pool(24, initializer=init_worker) as pool:
+with Pool(12, initializer=init_worker) as pool:
     for result in pool.map(mp_running, needed_args):
         if result is None:
             continue
@@ -192,7 +192,7 @@ labels_list = [f"{h}hr" for h in past_hours] + [f"{h}hr" for h in past_hours]
 fig, axes = plt.subplots(4, 2, figsize=(18, 14))
 fig.suptitle('TCB Occurrences vs Previous TC Intensity Change',
              fontsize=24)
-fig.supxlabel(r'TC Wind Speed Change ($\frac{{dv}}{{dt}}$, $\frac{kt}{hr}$)', fontsize=24)
+fig.supxlabel(r'TC Wind Speed Change ($\frac{{dv}}{{dt}}$)', fontsize=24)
 fig.supylabel('Percentage of Pixels with TCBs', fontsize=24)
 rows, cols = axes.shape
 
@@ -258,9 +258,9 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
     ax.axvline(x=-20, color='blue', linestyle='--', lw=2, label='RW Transition')
     ax.axvline(x=30, color='magenta', linestyle='--', lw=2, label='RI Transition')
     if z < 4:
-        ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours (Atlantic)', fontsize=16)
+        ax.set_title(rf'Intensity Change over the Previous {label[1:-2]} Hours (Atlantic, kt {label[1:]}$^{{-1}}$)', fontsize=16)
     else:
-        ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours (Eastern Pacific)', fontsize=16)
+        ax.set_title(rf'Intensity Change over the Previous {label[1:-2]} Hours (Eastern Pacific, kt {label[1:]}$^{{-1}}$)', fontsize=16)
 
     # Add legend after the lines are drawn
 fig.subplots_adjust(
@@ -279,8 +279,8 @@ plt.close()
 
 fig, axes = plt.subplots(4, 2, figsize=(18, 14))
 fig.suptitle('Previous TC Intensity Change Mann-Whitney P-Values', fontsize=24)
-fig.supxlabel(r'TC Wind Speed Change ($\frac{dv}{dt}$, $\frac{kt}{hr}$)', fontsize=24)
-fig.supylabel(r'TC Wind Speed Change ($\frac{dv}{dt}$, $\frac{kt}{hr}$)', fontsize=24)
+fig.supxlabel(r'TC Wind Speed Change ($\frac{dv}{dt}$)', fontsize=24)
+fig.supylabel(r'TC Wind Speed Change ($\frac{dv}{dt}$)', fontsize=24)
 
 # Loop through each subplot
 rows, cols = axes.shape
@@ -333,9 +333,9 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
     ax.set_title(f'{label}', fontsize=16)
     ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
     if z < 4:
-        ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours (Atlantic)', fontsize=16)
+        ax.set_title(rf'Intensity Change over the Previous {label[1:-2]} Hours (Atlantic, kt {label[1:]}$^{{-1}}$)', fontsize=16)
     else:
-        ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours (Eastern Pacific)', fontsize=16)
+        ax.set_title(rf'Intensity Change over the Previous {label[1:-2]} Hours (Eastern Pacific, kt {label[1:]}$^{{-1}}$)', fontsize=16)
 
 # Add colorbar
 fig.subplots_adjust(
@@ -370,7 +370,7 @@ labels_list = [f"{h}hr" for h in future_hours] + [f"{h}hr" for h in future_hours
 fig, axes = plt.subplots(4, 2, figsize=(18, 14))
 fig.suptitle('TCB Occurrences vs Future TC Intensity Change',
              fontsize=24)
-fig.supxlabel(r'TC Wind Speed Change ($\frac{{dv}}{{dt}}$, $\frac{kt}{hr}$)', fontsize=24)
+fig.supxlabel(r'TC Wind Speed Change ($\frac{{dv}}{{dt}}$)', fontsize=24)
 fig.supylabel('Percentage of Pixels with TCBs', fontsize=24)
 rows, cols = axes.shape
 
@@ -436,9 +436,9 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
     ax.axvline(x=-20, color='blue', linestyle='--', lw=2, label='RW Transition')
     ax.axvline(x=30, color='magenta', linestyle='--', lw=2, label='RI Transition')
     if z < 4:
-        ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours (Atlantic)', fontsize=16)
+        ax.set_title(rf'Intensity Change over the Next {label[:-2]} Hours (Atlantic, kt {label}$^{{-1}}$)', fontsize=16)
     else:
-        ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours (Eastern Pacific)', fontsize=16)
+        ax.set_title(rf'Intensity Change over the Next {label[:-2]} Hours (Eastern Pacific, kt {label}$^{{-1}}$)', fontsize=16)
 
     # Add legend after the lines are drawn
 fig.subplots_adjust(
@@ -457,8 +457,8 @@ plt.close()
 
 fig, axes = plt.subplots(4, 2, figsize=(18, 14))
 fig.suptitle('Future TC Intensity Change Mann-Whitney P-Values', fontsize=24)
-fig.supxlabel(r'TC Wind Speed Change ($\frac{dv}{dt}$, $\frac{kt}{hr}$)', fontsize=24)
-fig.supylabel(r'TC Wind Speed Change ($\frac{dv}{dt}$, $\frac{kt}{hr}$)', fontsize=24)
+fig.supxlabel(r'TC Wind Speed Change ($\frac{dv}{dt}$)', fontsize=24)
+fig.supylabel(r'TC Wind Speed Change ($\frac{dv}{dt}$)', fontsize=24)
 
 # Loop through each subplot
 rows, cols = axes.shape
@@ -512,9 +512,9 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
     ax.set_title(f'{label}', fontsize=16)
     ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
     if z < 4:
-        ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours (Atlantic)', fontsize=16)
+        ax.set_title(rf'Intensity Change over the Next {label[:-2]} Hours (Atlantic, kt {label}$^{{-1}}$)', fontsize=16)
     else:
-        ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours (Eastern Pacific)', fontsize=16)
+        ax.set_title(rf'Intensity Change over the Next {label[:-2]} Hours (Eastern Pacific, kt {label}$^{{-1}}$)', fontsize=16)
 
 # Add colorbar
 # Adjust spacing to make room for colorbar at the bottom

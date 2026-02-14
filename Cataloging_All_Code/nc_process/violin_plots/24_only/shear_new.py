@@ -191,8 +191,8 @@ labels_list = [f"{h}hr" for h in past_hours] + [f"{h}hr" for h in past_hours]
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 8))
 fig.suptitle('TCB Occurrences vs Previous TC Intensity Change',
-             fontsize=24)
-fig.supxlabel(r'TC Wind Speed Change ($\frac{{dv}}{{dt}}$, $\frac{kt}{hr}$)', fontsize=24)
+             fontsize=24, y=1)
+fig.supxlabel(r'TC Wind Speed Change ($\frac{{dv}}{{dt}}$)', fontsize=24)
 fig.supylabel('Percentage of Pixels with TCBs', fontsize=24)
 for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, labels_list, x_labels)):
     labels = np.unique(np.concatenate([np.array(sublist) for sublist in labels]))
@@ -252,9 +252,9 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
     ax.axvline(x=-20, color='blue', linestyle='--', lw=2, label='RW Transition')
     ax.axvline(x=30, color='magenta', linestyle='--', lw=2, label='RI Transition')
     if z == 0:
-        ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours (Atlantic)', fontsize=16)
+        ax.set_title(f'Intensity Change over\n the Previous {label[1:-2]} Hours ' + rf'(Atlantic, kt {label[1:]}$^{{-1}}$)', fontsize=16)
     else:
-        ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours (Eastern Pacific)', fontsize=16)
+        ax.set_title(f'Intensity Change over\n the Previous {label[1:-2]} Hours ' + rf'(Eastern Pacific, kt {label[1:]}$^{{-1}}$)', fontsize=16)
 
     # Add legend after the lines are drawn
 fig.subplots_adjust(
@@ -272,9 +272,9 @@ plt.savefig('prev_intensity_change_ALEP.png')
 plt.close()
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-fig.suptitle('Previous TC Intensity Change Mann-Whitney P-Values', fontsize=24, y=0.95)
-fig.supxlabel(r'TC Wind Speed Change ($\frac{dv}{dt}$, $\frac{kt}{hr}$)', fontsize=24, y=0.07)
-fig.supylabel(r'TC Wind Speed Change ($\frac{dv}{dt}$, $\frac{kt}{hr}$)', fontsize=24, x=0.05)
+fig.suptitle('Previous TC Intensity Change Mann-Whitney P-Values', fontsize=24, y=1)
+fig.supxlabel(r'TC Wind Speed Change ($\frac{dv}{dt}$)', fontsize=24, y=0.07)
+fig.supylabel(r'TC Wind Speed Change ($\frac{dv}{dt}$)', fontsize=24, x=0.05)
 
 # Loop through each subplot
 for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, labels_list, x_labels)):
@@ -321,9 +321,9 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
     ax.set_title(f'{label}', fontsize=16)
     ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
     if z == 0:
-        ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours (Atlantic)', fontsize=16)
+        ax.set_title(f'Intensity Change over\n the Previous {label[1:-2]} Hours ' + rf'(Atlantic, kt {label[1:]}$^{{-1}}$)', fontsize=16)
     else:
-        ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours (Eastern Pacific)', fontsize=16)
+        ax.set_title(f'Intensity Change over\n the Previous {label[1:-2]} Hours ' + rf'(Eastern Pacific, kt {label[1:]}$^{{-1}}$)', fontsize=16)
 
 # Add colorbar
 fig.subplots_adjust(
@@ -355,8 +355,8 @@ labels_list = [f"{h}hr" for h in future_hours] + [f"{h}hr" for h in future_hours
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 8))
 fig.suptitle('TCB Occurrences vs Future TC Intensity Change',
-             fontsize=24)
-fig.supxlabel(r'TC Wind Speed Change ($\frac{{dv}}{{dt}}$, $\frac{kt}{hr}$)', fontsize=24)
+             fontsize=24, y=1)
+fig.supxlabel(r'TC Wind Speed Change ($\frac{{dv}}{{dt}}$)', fontsize=24)
 fig.supylabel('Percentage of Pixels with TCBs', fontsize=24)
 for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, labels_list, x_labels)):
     labels = np.unique(np.concatenate([np.array(sublist) for sublist in labels]))
@@ -416,9 +416,9 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
     ax.axvline(x=-20, color='blue', linestyle='--', lw=2, label='RW Transition')
     ax.axvline(x=30, color='magenta', linestyle='--', lw=2, label='RI Transition')
     if z == 0:
-        ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours (Atlantic)', fontsize=16)
+        ax.set_title(f'Intensity Change over\n the Next {label[:-2]} Hours ' + rf'(Atlantic, kt {label}$^{{-1}}$)', fontsize=16)
     else:
-        ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours (Eastern Pacific)', fontsize=16)
+        ax.set_title(f'Intensity Change over\n the Next {label[:-2]} Hours ' + rf'(Eastern Pacific, kt {label}$^{{-1}}$)', fontsize=16)
 
     # Add legend after the lines are drawn
 fig.subplots_adjust(
@@ -436,9 +436,9 @@ plt.savefig('future_intensity_change_ALEP.png')
 plt.close()
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-fig.suptitle('Future TC Intensity Change Mann-Whitney P-Values', fontsize=24, y=0.95)
-fig.supxlabel(r'TC Wind Speed Change ($\frac{dv}{dt}$, $\frac{kt}{hr}$)', fontsize=24, y=0.12)
-fig.supylabel(r'TC Wind Speed Change ($\frac{dv}{dt}$, $\frac{kt}{hr}$)', fontsize=24, x=0.05)
+fig.suptitle('Future TC Intensity Change Mann-Whitney P-Values', fontsize=24, y=1)
+fig.supxlabel(r'TC Wind Speed Change ($\frac{dv}{dt}$)', fontsize=24, y=0.12)
+fig.supylabel(r'TC Wind Speed Change ($\frac{dv}{dt}$)', fontsize=24, x=0.05)
 
 # Loop through each subplot
 for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, labels_list, x_labels)):
@@ -486,9 +486,9 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
     ax.set_title(f'{label}', fontsize=16)
     ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
     if z == 0:
-        ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours (Atlantic)', fontsize=16)
+        ax.set_title(f'Intensity Change over\n the Next {label[:-2]} Hours ' + rf'(Atlantic, kt {label}$^{{-1}}$)', fontsize=16)
     else:
-        ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours (Eastern Pacific)', fontsize=16)
+        ax.set_title(f'Intensity Change over\n the Next {label[:-2]} Hours ' + rf'(Eastern Pacific, kt {label}$^{{-1}}$)', fontsize=16)
 
 # Add colorbar
 # Adjust spacing to make room for colorbar at the bottom
