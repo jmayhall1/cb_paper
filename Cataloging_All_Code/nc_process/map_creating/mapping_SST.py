@@ -90,7 +90,11 @@ def compute_sst_average(file_pattern: str, months: list):
     file_count = 0
 
     for file in files:
-        if any(f".{m:02d}." in file for m in months):
+        fname = Path(file).name
+        date_str = fname.split('.')[2]  # '199508'
+        month = int(date_str[4:6])
+
+        if month in months:
             ds = xr.open_dataset(file)['TSKINWTR'][0].values  # first timestep
             if count_arr is None:
                 count_arr = np.zeros_like(ds, dtype=float)
@@ -121,7 +125,7 @@ def plot_tc_sst(categories: dict, sst_avg, lon: list, lat: list, extent: tuple):
     ax.add_feature(cfeature.RIVERS)
 
     # Gridlines
-    gl = ax.gridlines(draw_labels=True, linewidth=1, color='black', alpha=0.5, linestyle='--')
+    gl = ax.gridlines(draw_labels=True, linewidth=2, color='black', alpha=0.5, linestyle='--')
     gl.xlocator = mticker.FixedLocator([-140, -120, -100, -80, -60, -40, -20])
     gl.ylocator = mticker.FixedLocator([0, 10, 20, 30])
     gl.xformatter = LONGITUDE_FORMATTER
@@ -132,24 +136,25 @@ def plot_tc_sst(categories: dict, sst_avg, lon: list, lat: list, extent: tuple):
                            levels=np.arange(18, 30.01, 0.1))
 
     # Plot TC categories
-    ax.scatter(*categories['TD'][1], *categories['TD'][0], color='yellow', s=10, label='TD')
-    ax.scatter(*categories['TS'][1], *categories['TS'][0], color='orange', s=10, label='TS')
-    ax.scatter(*categories['CAT12'][1], *categories['CAT12'][0], color='red', s=10, label='CAT 1-2')
-    ax.scatter(*categories['CAT35'][1], *categories['CAT35'][0], color='magenta', s=10, label='CAT 3-5')
+    ax.scatter(categories['TD'][1], categories['TD'][0], color='yellow', s=10, label='TD')
+    ax.scatter(categories['TS'][1], categories['TS'][0], color='orange', s=10, label='TS')
+    ax.scatter(categories['CAT12'][1], categories['CAT12'][0], color='red', s=10, label='CAT 1-2')
+    ax.scatter(categories['CAT35'][1], categories['CAT35'][0], color='magenta', s=10, label='CAT 3-5')
 
-    ax.set_title('Training, Validation, and Analysis Cases with 1995-2024 May-Nov SST')
+    ax.set_title('Atlantic and Eastern Pacific Analysis Cases\n' +
+                 r'with 1995-2024 May-Nov Sea Surface Temperatures (SSTs) in $^\circ C$')
     plt.xlabel('Longitude')
     plt.ylabel('Latitude')
     plt.legend(loc='upper right', framealpha=0.4)
 
     # Colorbar
     degree_sign = u'\N{DEGREE SIGN}'
-    ig.colorbar(sst_plot, ax=ax, location='bottom', label=f'SST ({degree_sign}C)',
+    fig.colorbar(sst_plot, ax=ax, location='bottom', label=f'SST ({degree_sign}C)',
                 ticks=np.arange(18, 31, 1),
                 format=mticker.FixedFormatter(['≤18', '19', '20', '21', '22', '23',
                                                '24', '25', '26', '27', '28', '29', '≥30']),
                 extend='both')
-
+    plt.tight_layout()
     plt.savefig('tc_tracks_sst.png', dpi=300)
     plt.close(fig)
 
@@ -177,7 +182,7 @@ if __name__ == "__main__":
 
     # SST averaging
     sst_avg = compute_sst_average('//uahdata/rstor/cataloging/nc_process/map_creating/data/*._nc_',
-                                  months=list(np.arrange(5, 12, 1)))
+                                  months=list(np.arange(5, 12, 1)))
 
     # Get lon/lat for plotting from one SST file
     sample_ds = xr.open_dataset(glob.glob('//uahdata/rstor/cataloging/nc_process/map_creating/data/*._nc_')[0])

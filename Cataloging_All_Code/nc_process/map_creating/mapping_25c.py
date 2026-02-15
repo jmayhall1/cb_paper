@@ -113,7 +113,7 @@ def plot_tc_25c(categories: dict, extent: tuple = (35.1, -0.1, -145.1, -14.9), o
     ax.add_feature(cfeature.RIVERS)
 
     # Gridlines
-    gl = ax.gridlines(draw_labels=True, linewidth=1, color='black', alpha=0.5, linestyle='--')
+    gl = ax.gridlines(draw_labels=True, linewidth=2, color='black', alpha=0.5, linestyle='--')
     gl.xlocator = mticker.FixedLocator([-140, -120, -100, -80, -60, -40, -20])
     gl.ylocator = mticker.FixedLocator([0, 10, 20, 30])
     gl.xformatter = LONGITUDE_FORMATTER
@@ -137,12 +137,13 @@ def plot_tc_25c(categories: dict, extent: tuple = (35.1, -0.1, -145.1, -14.9), o
                color='magenta', s=10, label='CAT 3–5')
 
     ax.set_title(
-        'Training, Validation, and Analysis Cases\nAtlantic & East Pacific TC Images\n'
-        'Over SST ~25°C Currently or ±24 Hours'
+        'Atlantic and Eastern Pacific Analysis Images\n' +
+        r'Over Sea Surface Temperatures (SSTs) of $\approx$25$^\circ C$ Currently or ±24 Hours'
     )
     plt.xlabel('Longitude')
     plt.ylabel('Latitude')
     plt.legend(loc='upper right', framealpha=0.4)
+    plt.tight_layout()
     plt.savefig(output_file, dpi=300)
     plt.close(fig)
 

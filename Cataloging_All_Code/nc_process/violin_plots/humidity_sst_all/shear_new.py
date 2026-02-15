@@ -415,13 +415,13 @@ if __name__ == '__main__':
     data_EP, labels_EP = group_func(results_EP['sst_pixel'], results_EP['sst_count'])
     fig1, _ = plot_violin_2panel(data_AL, labels_AL, data_EP, labels_EP,
                        suptitle='TCB Occurrences vs SST',
-                       xlabel='SST (C)',
+                       xlabel=r'SST ($^\circ$C)',
                        ylabel='Percentage of Storm Pixels with TCBs',
                        filename='sst_violin_ALEP.png')
     fig2, _ = plot_contourf_2panel(data_AL, labels_AL, data_EP, labels_EP,
                          suptitle='SST Mann-Whitney P-Values',
-                         xlabel='SST (C)',
-                         ylabel='SST (C)',
+                         xlabel=r'SST ($^\circ$C)',
+                         ylabel=r'SST ($^\circ$C)',
                          filename='sst_mannwhitney_ALEP.png')
 
     img1 = fig_to_rgb(fig1)
