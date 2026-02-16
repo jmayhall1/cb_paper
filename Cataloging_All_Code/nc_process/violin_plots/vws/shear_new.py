@@ -17,28 +17,49 @@ from matplotlib.cm import ScalarMappable
 from scipy.stats import mannwhitneyu
 from shear_multi import mp_running, init_worker
 
-
-def group_func(data: list, group_labels: list):
+def group_func(data: list, group_labels: list) -> list:
     """
-    Group pixel data by rounded intensity change bins.
-
-    Converts raw pixel counts to percentage of domain (1024x1024).
-    Returns:
-        grouped_data : list of lists (pixel % per bin)
-        grouped_labels : list of lists (bin labels)
+    Function for grouping data and labels in nested lists.
+    :param data: Data to be grouped
+    :param group_labels: Grouping labels
+    :return: Two nested lists of grouped data and labels
     """
-    df = pd.DataFrame({
-        "label": group_labels,
-        "data": data
-    }).dropna()
+    sorted_pairs = sorted(zip(group_labels, data))
+    group_labels, data = zip(*sorted_pairs)
+    group_labels = list(group_labels)
+    data = list(data)
 
-    # Convert to % once (vectorized)
-    df["data"] = (df["data"] / (1024 * 1024)) * 100
+    grouped_l1 = defaultdict(list)
+    grouped_l2 = defaultdict(list)
 
-    grouped = df.groupby("label")["data"].apply(list).sort_index()
+    for val1, val2 in zip(group_labels, data):
+        grouped_l1[val1].append(val1)
+        grouped_l2[val1].append(val2)
 
-    return grouped.tolist(), [[k] * len(v) for k, v in grouped.items()]
+    # Sortby unique keys from list1 to keep order consistent
+    keys = sorted(grouped_l1.keys())
+    group_labels = [grouped_l1[k] for k in keys]
+    data = [grouped_l2[k] for k in keys]
 
+    # Create nested list from grouped values
+    final_data = []
+    for d in data:
+        final_data.append([(num / (1024 * 1024)) * 100 for num in d])
+        flat = [item for sublist in final_data for item in sublist]
+        if np.max(flat) > 60:
+            print(f'High final data: {final_data}')
+
+    return final_data, group_labels
+
+
+def adjacent_values(sorted_array, q1, q3):
+    """Calculate adjacent values for whiskers in box/violin plots."""
+    iqr = q3 - q1
+    upper_adj = q3 + 1.5 * iqr
+    lower_adj = q1 - 1.5 * iqr
+    upper = max([x for x in sorted_array if x <= upper_adj], default=q3)
+    lower = min([x for x in sorted_array if x >= lower_adj], default=q1)
+    return lower, upper
 
 def compute_pval_grid(data: list) -> np.ndarray:
     """
@@ -89,6 +110,13 @@ def split_basin(results: dict):
     return results_al, results_ep
 
 
+def fig_to_rgb(fig):
+    fig.canvas.draw()
+    w, h = fig.canvas.get_width_height()
+    buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+    return buf.reshape(h, w, 3)
+
+
 # ================= Clean data =================
 def clean_all(results: dict) -> dict:
     """
@@ -99,15 +127,6 @@ def clean_all(results: dict) -> dict:
     results['shear_pixel'], results['shear_count'] = clean_func(results['shear_pixel'],
                                                                         results['shear_count'])
     return results
-
-
-def adjacent_values(sorted_array: np.ndarray, q1: float, q3: float) -> tuple[float, float]:
-    """Compute whisker limits for violin/box plots."""
-    iqr = q3 - q1
-    upper = min(max(sorted_array[sorted_array <= q3 + 1.5 * iqr], default=q3), max(sorted_array))
-    lower = max(min(sorted_array[sorted_array >= q1 - 1.5 * iqr], default=q1), min(sorted_array))
-    return lower, upper
-
 
 def plot_violin_2panel_shear(data1, labels1, data2, labels2, suptitle, xlabel, ylabel, filename):
     """
@@ -204,27 +223,9 @@ def plot_contourf_2panel_shear(data1: list, labels1: list, data2: list, labels2:
     Plot p-values after binning data into 3-hour intervals.
     """
 
-    def bin_data(data: list, labels: list):
-        """
-        Bin data into 3-hourly bins centered on 0, 3, ..., 21.
-        The 24-hour bin wraps into 0.
-        """
-        bins = defaultdict(list)  # key: (x_bin, y_bin) => list of values
-
-        for group, label_group in zip(data, labels):
-            for val, (x_lab, y_lab) in zip(group, zip(label_group, label_group)):
-                x_bin = 5 * np.round(x_lab / 5)
-                y_bin = 5 * np.round(y_lab / 5)
-                bins[(x_bin, y_bin)].append(val)
-
-        bin_centers = list(range(0, 31, 5))
-        grid = [[bins.get((x, y), []) for x in bin_centers] for y in bin_centers]
-        return grid, bin_centers
-
     # Bin and compute p-value grids
-    binned1, centers1 = bin_data(data1, labels1)
-    binned2, centers2 = bin_data(data2, labels2)
-
+    binned1, centers1 = data1, np.unique(np.concatenate([np.array(sublist) for sublist in labels1]))
+    binned2, centers2 = data2, np.unique(np.concatenate([np.array(sublist) for sublist in labels2]))
     pvals1 = compute_pval_grid(binned1)
     pvals2 = compute_pval_grid(binned2)
 

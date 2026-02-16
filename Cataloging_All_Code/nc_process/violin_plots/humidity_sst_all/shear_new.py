@@ -18,7 +18,7 @@ from shear_multi import mp_running, init_worker
 
 
 def adjacent_values(sorted_array, q1, q3):
-    """Compute whisker values for box/violin plots."""
+    """Calculate adjacent values for whiskers in box/violin plots."""
     iqr = q3 - q1
     upper_adj = q3 + 1.5 * iqr
     lower_adj = q1 - 1.5 * iqr
@@ -27,26 +27,39 @@ def adjacent_values(sorted_array, q1, q3):
     return lower, upper
 
 
-def group_func(data: list, group_labels: list):
+def group_func(data: list, group_labels: list) -> list:
     """
-    Group pixel data by rounded intensity change bins.
-
-    Converts raw pixel counts to percentage of domain (1024x1024).
-    Returns:
-        grouped_data : list of lists (pixel % per bin)
-        grouped_labels : list of lists (bin labels)
+    Function for grouping data and labels in nested lists.
+    :param data: Data to be grouped
+    :param group_labels: Grouping labels
+    :return: Two nested lists of grouped data and labels
     """
-    df = pd.DataFrame({
-        "label": group_labels,
-        "data": data
-    }).dropna()
+    sorted_pairs = sorted(zip(group_labels, data))
+    group_labels, data = zip(*sorted_pairs)
+    group_labels = list(group_labels)
+    data = list(data)
 
-    # Convert to % once (vectorized)
-    df["data"] = (df["data"] / (1024 * 1024)) * 100
+    grouped_l1 = defaultdict(list)
+    grouped_l2 = defaultdict(list)
 
-    grouped = df.groupby("label")["data"].apply(list).sort_index()
+    for val1, val2 in zip(group_labels, data):
+        grouped_l1[val1].append(val1)
+        grouped_l2[val1].append(val2)
 
-    return grouped.tolist(), [[k] * len(v) for k, v in grouped.items()]
+    # Sortby unique keys from list1 to keep order consistent
+    keys = sorted(grouped_l1.keys())
+    group_labels = [grouped_l1[k] for k in keys]
+    data = [grouped_l2[k] for k in keys]
+
+    # Create nested list from grouped values
+    final_data = []
+    for d in data:
+        final_data.append([(num / (1024 * 1024)) * 100 for num in d])
+        flat = [item for sublist in final_data for item in sublist]
+        if np.max(flat) > 60:
+            print(f'High final data: {final_data}')
+
+    return final_data, group_labels
 
 
 def fig_to_rgb(fig):
@@ -266,7 +279,7 @@ def plot_rh_violin_ax(ax, data, labels, title, rh_lims):
 
     for group, label_group in zip(data, labels):
         for val, lab in zip(group, label_group):
-            binned_lab = (10 * (lab // 10))
+            binned_lab = 10 * float(np.round(lab / 10))
             bins[binned_lab].append(val)
 
     violin_positions = np.array(sorted(bins.keys()), dtype=float)
@@ -331,7 +344,7 @@ def plot_rh_violin_ax(ax, data, labels, title, rh_lims):
         )
 
     ax.set_xlim((start - 5, end + 4))
-    ax.set_xticks(range(start, end, step))
+    ax.set_xticks(np.arange(start, end, step))
     ax.set_ylim((0, 60))
     ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
     ax.set_title(title, fontsize=24)
@@ -472,6 +485,8 @@ if __name__ == '__main__':
             axes[row, col].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
             axes[row, col].set_xlim(rh_lims[col][0] - 5, rh_lims[col][1] + 4)
             axes[row, col].set_ylim(rh_lims[col][0] - 5, rh_lims[col][1] + 4)
+            axes[row, col].set_xticks(np.arange(rh_lims[col][0], rh_lims[col][1], rh_lims[col][2]))
+            axes[row, col].set_yticks(np.arange(rh_lims[col][0], rh_lims[col][1], rh_lims[col][2]))
             axes[row, col].tick_params(axis='both', labelsize=18)
 
     fig.suptitle('RH Mann–Whitney P-Values', fontsize=28)
