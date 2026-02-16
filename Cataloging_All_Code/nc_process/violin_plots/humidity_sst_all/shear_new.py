@@ -193,25 +193,9 @@ def plot_contourf_2panel(data1: list, labels1: list, data2: list, labels2: list,
     Plot p-values
     """
 
-    def bin_data(data: list, labels: list):
-        """
-        Bin data
-        """
-        bins = defaultdict(list)  # key: (x_bin, y_bin) => list of values
-
-        for group, label_group in zip(data, labels):
-            for val, (x_lab, y_lab) in zip(group, zip(label_group, label_group)):
-                x_bin = (int(x_lab))
-                y_bin = (int(y_lab))
-                bins[(x_bin, y_bin)].append(val)
-
-        bin_centers = list(range(18, 33, 1))
-        grid = [[bins.get((x, y), []) for x in bin_centers] for y in bin_centers]
-        return grid, bin_centers
-
     # Bin and compute p-value grids
-    binned1, centers1 = bin_data(data1, labels1)
-    binned2, centers2 = bin_data(data2, labels2)
+    binned1, centers1 = data1, np.unique(np.concatenate([np.array(sublist) for sublist in labels1]))
+    binned2, centers2 = data2, np.unique(np.concatenate([np.array(sublist) for sublist in labels2]))
 
     pvals1 = compute_pval_grid(binned1)
     pvals2 = compute_pval_grid(binned2)
