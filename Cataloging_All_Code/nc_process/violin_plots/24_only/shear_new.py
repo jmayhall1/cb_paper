@@ -232,8 +232,8 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
         ax.set_xlim((-85, 85))
         ax.set_xticks(range(-80, 81, 20))
     elif '24' in label:
-        ax.set_xlim((-105, 105))
-        ax.set_xticks(range(-100, 101, 20))
+        ax.set_xlim((-85, 85))
+        ax.set_xticks(range(-80, 81, 20))
     ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
     plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
     # Ensure there's enough space at the top
@@ -309,9 +309,9 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
         ax.set_ylim((-85, 85))
         tick_marks = range(-80, 81, 20)
     elif '24' in label:
-        ax.set_xlim((-105, 105))
-        ax.set_ylim((-105, 105))
-        tick_marks = range(-100, 101, 20)
+        ax.set_xlim((-85, 85))
+        ax.set_ylim((-85, 85))
+        tick_marks = range(-80, 81, 20)
     ax.set_xticks(tick_marks)
     ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
     ax.set_yticks(tick_marks)
@@ -396,8 +396,8 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
         ax.set_xlim((-105, 85))
         ax.set_xticks(range(-100, 81, 20))
     elif '24' in label:
-        ax.set_xlim((-125, 105))
-        ax.set_xticks(range(-120, 101, 20))
+        ax.set_xlim((-105, 85))
+        ax.set_xticks(range(-100, 81, 20))
     ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
     plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
     # Ensure there's enough space at the top
@@ -474,9 +474,9 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
         ax.set_ylim((-105, 85))
         tick_marks = range(-100, 81, 20)
     elif '24' in label:
-        ax.set_xlim((-125, 105))
-        ax.set_ylim((-125, 105))
-        tick_marks = range(-120, 101, 20)
+        ax.set_xlim((-105, 85))
+        ax.set_ylim((-105, 85))
+        ax.set_xticks(range(-100, 81, 20))
     ax.set_xticks(tick_marks)
     ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
     ax.set_yticks(tick_marks)

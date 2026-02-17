@@ -238,8 +238,8 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
         ax.set_xlim((-85, 85))
         ax.set_xticks(range(-80, 81, 20))
     elif '24' in label:
-        ax.set_xlim((-105, 105))
-        ax.set_xticks(range(-100, 101, 20))
+        ax.set_xlim((-85, 85))
+        ax.set_xticks(range(-80, 81, 20))
     ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
     plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
     # Ensure there's enough space at the top
@@ -309,21 +309,21 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
     ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=14)
     ax.set_yticklabels(labels, fontsize=14)
     if '6' in label:
-        ax.set_xlim((-70, 50))
-        ax.set_ylim((-70, 50))
+        ax.set_xlim((-65, 45))
+        ax.set_ylim((-65, 45))
         tick_marks = range(-60, 41, 20)
     elif '12' in label:
-        ax.set_xlim((-110, 70))
-        ax.set_ylim((-110, 70))
+        ax.set_xlim((-105, 65))
+        ax.set_ylim((-105, 65))
         tick_marks = range(-100, 61, 20)
     elif '18' in label:
-        ax.set_xlim((-90, 90))
-        ax.set_ylim((-90, 90))
+        ax.set_xlim((-85, 85))
+        ax.set_ylim((-85, 85))
         tick_marks = range(-80, 81, 20)
     elif '24' in label:
-        ax.set_xlim((-110, 110))
-        ax.set_ylim((-110, 110))
-        tick_marks = range(-100, 101, 20)
+        ax.set_xlim((-85, 85))
+        ax.set_ylim((-85, 85))
+        tick_marks = range(-80, 81, 20)
     ax.set_xticks(tick_marks)
     ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
     ax.set_yticks(tick_marks)
@@ -416,8 +416,8 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
         ax.set_xlim((-105, 85))
         ax.set_xticks(range(-100, 81, 20))
     elif '24' in label:
-        ax.set_xlim((-125, 105))
-        ax.set_xticks(range(-120, 101, 20))
+        ax.set_xlim((-105, 85))
+        ax.set_xticks(range(-100, 81, 20))
     ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
     plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
     # Ensure there's enough space at the top
@@ -488,21 +488,21 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
     ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=14)
     ax.set_yticklabels(labels, fontsize=14)
     if '6' in label:
-        ax.set_xlim((-70, 50))
-        ax.set_ylim((-70, 50))
+        ax.set_xlim((-65, 45))
+        ax.set_ylim((-65, 45))
         tick_marks = range(-60, 41, 20)
     elif '12' in label:
-        ax.set_xlim((-110, 70))
-        ax.set_ylim((-110, 70))
+        ax.set_xlim((-105, 65))
+        ax.set_ylim((-105, 65))
         tick_marks = range(-100, 61, 20)
     elif '18' in label:
-        ax.set_xlim((-110, 90))
-        ax.set_ylim((-110, 90))
+        ax.set_xlim((-105, 85))
+        ax.set_ylim((-105, 85))
         tick_marks = range(-100, 81, 20)
     elif '24' in label:
-        ax.set_xlim((-130, 110))
-        ax.set_ylim((-130, 110))
-        tick_marks = range(-120, 101, 20)
+        ax.set_xlim((-105, 85))
+        ax.set_ylim((-105, 85))
+        ax.set_xticks(range(-100, 81, 20))
     ax.set_xticks(tick_marks)
     ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
     ax.set_yticks(tick_marks)
