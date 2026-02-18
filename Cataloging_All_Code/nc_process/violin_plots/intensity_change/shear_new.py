@@ -229,16 +229,16 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
     ax.vlines(inds, whiskers_min, whiskers_max, color='k', linestyle='-', lw=1)
     ax.set_ylim((0, 60))
     if '6' in label:
-        ax.set_xlim((-65, 45))
+        ax.set_xlim((-70, 50))
         ax.set_xticks(range(-60, 41, 20))
     elif '12' in label:
-        ax.set_xlim((-105, 65))
+        ax.set_xlim((-110, 70))
         ax.set_xticks(range(-100, 61, 20))
     elif '18' in label:
-        ax.set_xlim((-85, 85))
+        ax.set_xlim((-90, 90))
         ax.set_xticks(range(-80, 81, 20))
     elif '24' in label:
-        ax.set_xlim((-85, 85))
+        ax.set_xlim((-90, 90))
         ax.set_xticks(range(-80, 81, 20))
     ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
     plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
@@ -309,20 +309,20 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
     ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=14)
     ax.set_yticklabels(labels, fontsize=14)
     if '6' in label:
-        ax.set_xlim((-65, 45))
-        ax.set_ylim((-65, 45))
+        ax.set_xlim((-70, 50))
+        ax.set_ylim((-70, 50))
         tick_marks = range(-60, 41, 20)
     elif '12' in label:
-        ax.set_xlim((-105, 65))
-        ax.set_ylim((-105, 65))
+        ax.set_xlim((-110, 70))
+        ax.set_ylim((-110, 70))
         tick_marks = range(-100, 61, 20)
     elif '18' in label:
-        ax.set_xlim((-85, 85))
-        ax.set_ylim((-85, 85))
+        ax.set_xlim((-90, 90))
+        ax.set_ylim((-90, 90))
         tick_marks = range(-80, 81, 20)
     elif '24' in label:
-        ax.set_xlim((-85, 85))
-        ax.set_ylim((-85, 85))
+        ax.set_xlim((-90, 90))
+        ax.set_ylim((-90, 90))
         tick_marks = range(-80, 81, 20)
     ax.set_xticks(tick_marks)
     ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
@@ -407,16 +407,16 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
     ax.vlines(inds, whiskers_min, whiskers_max, color='k', linestyle='-', lw=1)
     ax.set_ylim((0, 60))
     if '6' in label:
-        ax.set_xlim((-65, 45))
+        ax.set_xlim((-70, 50))
         ax.set_xticks(range(-60, 41, 20))
     elif '12' in label:
-        ax.set_xlim((-105, 65))
+        ax.set_xlim((-110, 70))
         ax.set_xticks(range(-100, 61, 20))
     elif '18' in label:
-        ax.set_xlim((-105, 85))
+        ax.set_xlim((-110, 90))
         ax.set_xticks(range(-100, 81, 20))
     elif '24' in label:
-        ax.set_xlim((-105, 85))
+        ax.set_xlim((-110, 90))
         ax.set_xticks(range(-100, 81, 20))
     ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
     plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
@@ -488,20 +488,20 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
     ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=14)
     ax.set_yticklabels(labels, fontsize=14)
     if '6' in label:
-        ax.set_xlim((-65, 45))
-        ax.set_ylim((-65, 45))
+        ax.set_xlim((-70, 50))
+        ax.set_ylim((-70, 50))
         tick_marks = range(-60, 41, 20)
     elif '12' in label:
-        ax.set_xlim((-105, 65))
-        ax.set_ylim((-105, 65))
+        ax.set_xlim((-110, 70))
+        ax.set_ylim((-110, 70))
         tick_marks = range(-100, 61, 20)
     elif '18' in label:
-        ax.set_xlim((-105, 85))
-        ax.set_ylim((-105, 85))
+        ax.set_xlim((-110, 90))
+        ax.set_ylim((-110, 90))
         tick_marks = range(-100, 81, 20)
     elif '24' in label:
-        ax.set_xlim((-105, 85))
-        ax.set_ylim((-105, 85))
+        ax.set_xlim((-110, 90))
+        ax.set_ylim((-110, 90))
         ax.set_xticks(range(-100, 81, 20))
     ax.set_xticks(tick_marks)
     ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
