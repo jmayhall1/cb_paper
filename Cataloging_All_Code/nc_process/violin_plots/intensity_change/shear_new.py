@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.cm import ScalarMappable
+from matplotlib.legend_handler import HandlerPatch
 from matplotlib.lines import Line2D
 from matplotlib.patches import Circle, Wedge
 from matplotlib.ticker import FuncFormatter
