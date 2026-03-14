@@ -13,6 +13,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.cm import ScalarMappable
+from matplotlib.lines import Line2D
+from matplotlib.patches import Circle
 from matplotlib.ticker import FuncFormatter
 from scipy.stats import mannwhitneyu
 from shear_multi import mp_running, init_worker

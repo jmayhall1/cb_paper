@@ -13,29 +13,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.cm import ScalarMappable
-from matplotlib.legend_handler import HandlerPatch
 from matplotlib.lines import Line2D
-from matplotlib.patches import Wedge, Circle
+from matplotlib.patches import Circle
 from matplotlib.ticker import FuncFormatter
 from scipy.stats import mannwhitneyu
 from shear_multi import mp_running, init_worker
 
-
-class HandlerHalfCircle(HandlerPatch):
-    def create_artists(self, legend, orig_handle,
-                       xdescent, ydescent, width, height, fontsize, trans):
-
-        center = (width/2 - xdescent, height/2 - ydescent)
-        r = min(width, height) / 1.6
-
-        red = Wedge(center, r, 90, 270, facecolor='red', edgecolor='none')
-        blue = Wedge(center, r, -90, 90, facecolor='blue', edgecolor='none')
-        outline = Circle(center, r, facecolor='none', edgecolor='black', lw=0.5)
-
-        for a in (red, blue, outline):
-            a.set_transform(trans)
-
-        return [red, blue, outline]
 
 def label_every_20(x, pos):
     """
