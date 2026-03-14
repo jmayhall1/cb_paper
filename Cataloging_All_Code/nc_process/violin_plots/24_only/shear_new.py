@@ -14,10 +14,30 @@ import numpy as np
 import pandas as pd
 from matplotlib.cm import ScalarMappable
 from matplotlib.lines import Line2D
-from matplotlib.patches import Circle
+from matplotlib.patches import Circle, Wedge
 from matplotlib.ticker import FuncFormatter
 from scipy.stats import mannwhitneyu
 from shear_multi import mp_running, init_worker
+
+
+class HandlerHalfCircle(HandlerPatch):
+    def create_artists(self, legend, orig_handle,
+                       xdescent, ydescent, width, height, fontsize, trans):
+
+        center = (width / 2 - xdescent, height / 2 - ydescent)
+        radius = min(width, height) / 2
+
+        # Left half (red)
+        left = Wedge(center, radius, 90, 270,
+                     facecolor='red', edgecolor='black', lw=1,
+                     transform=trans)
+
+        # Right half (blue)
+        right = Wedge(center, radius, -90, 90,
+                      facecolor='blue', edgecolor='black', lw=1,
+                      transform=trans)
+
+        return [left, right]
 
 
 def label_every_20(x, pos):
