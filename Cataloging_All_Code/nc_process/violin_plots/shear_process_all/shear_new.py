@@ -14,8 +14,19 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.cm import ScalarMappable
+from matplotlib.lines import Line2D
 from scipy.stats import mannwhitneyu
 from shear_multi import mp_running, init_worker
+
+
+def intensity_color(intensity):
+    """Return color based on TC intensity regime."""
+    if intensity < 70:
+        return 'orange'     # TD/TS
+    elif intensity <= 90:
+        return 'red'        # Hurricane
+    else:
+        return 'magenta'    # Major Hurricane
 
 
 def group_func(data: list, group_labels: list):
@@ -235,9 +246,11 @@ def plot_contourf_2panel_diurnal(data1: list, labels1: list, data2: list, labels
     # Bin and compute p-value grids
     binned1, centers1 = bin_data_by_3hr(data1, labels1)
     binned2, centers2 = bin_data_by_3hr(data2, labels2)
+    flat1 = [binned1[i][i] for i in range(len(binned1))]
+    flat2 = [binned2[i][i] for i in range(len(binned2))]
 
-    pvals1 = compute_pval_grid(binned1)
-    pvals2 = compute_pval_grid(binned2)
+    pvals1 = compute_pval_grid(flat1)
+    pvals2 = compute_pval_grid(flat2)
 
     fig, axes = plt.subplots(1, 2, figsize=(16, 8))
 
@@ -419,8 +432,11 @@ def plot_contourf_2panel_intensity(data1: list, labels1: list, data2: list, labe
     binned1, centers1 = bin_data(data1, labels1)
     binned2, centers2 = bin_data(data2, labels2)
 
-    pvals1 = compute_pval_grid(binned1)
-    pvals2 = compute_pval_grid(binned2)
+    flat1 = [binned1[i][i] for i in range(len(binned1))]
+    flat2 = [binned2[i][i] for i in range(len(binned2))]
+
+    pvals1 = compute_pval_grid(flat1)
+    pvals2 = compute_pval_grid(flat2)
 
     fig, axes = plt.subplots(1, 2, figsize=(16, 8))
 
@@ -436,7 +452,24 @@ def plot_contourf_2panel_intensity(data1: list, labels1: list, data2: list, labe
     mask = z_flat < 0.05
     x_masked = x_flat[mask]
     y_masked = y_flat[mask]
-    axes[0].scatter(x_masked, y_masked, c='black', s=200, label='p < 0.05')
+    for x_val, y_val in zip(x_masked, y_masked):
+        color_x = intensity_color(x_val)
+        color_y = intensity_color(y_val)
+
+        marker_size = np.sqrt(250)
+
+        axes[0].plot(
+            x_val, y_val,
+            marker='o',
+            markersize=marker_size,
+            markerfacecolor=color_x,  # left half
+            markerfacecoloralt=color_y,  # right half
+            markeredgecolor='black',
+            markeredgewidth=1.2,
+            fillstyle='left',
+            linestyle='None',
+            zorder=3
+        )
     axes[0].set_xlim((15, 165))
     axes[0].set_ylim((15, 165))
     axes[0].set_xticks(tick_marks)
@@ -456,7 +489,24 @@ def plot_contourf_2panel_intensity(data1: list, labels1: list, data2: list, labe
     mask = z_flat < 0.05
     x_masked = x_flat[mask]
     y_masked = y_flat[mask]
-    axes[1].scatter(x_masked, y_masked, c='black', s=200, label='p < 0.05')
+    for x_val, y_val in zip(x_masked, y_masked):
+        color_x = intensity_color(x_val)
+        color_y = intensity_color(y_val)
+
+        marker_size = np.sqrt(250)
+
+        axes[1].plot(
+            x_val, y_val,
+            marker='o',
+            markersize=marker_size,
+            markerfacecolor=color_x,
+            markerfacecoloralt=color_y,
+            markeredgecolor='black',
+            markeredgewidth=1.2,
+            fillstyle='left',
+            linestyle='None',
+            zorder=3
+        )
     axes[1].set_xlim((15, 165))
     axes[1].set_ylim((15, 165))
     axes[1].set_xticks(tick_marks)
@@ -473,10 +523,13 @@ def plot_contourf_2panel_intensity(data1: list, labels1: list, data2: list, labe
     fig.supxlabel(xlabel, fontsize=28, y=0.13)
     fig.supylabel(ylabel, fontsize=28, x=0.05)
 
-    # Add legend
-    handles, labels = axes[0].get_legend_handles_labels()
-    by_label = dict(zip(labels, handles))
-    fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=20, framealpha=0)
+    legend_elements = [
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='orange', markersize=12, label='TD/TS'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=12, label='HUR'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='magenta', markersize=12, label='MAJ HUR')
+    ]
+
+    fig.legend(handles=legend_elements, loc='upper right', fontsize=12, framealpha=0)
     plt.savefig(filename)
     return fig, axes
 

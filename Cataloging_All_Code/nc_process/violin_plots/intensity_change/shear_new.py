@@ -13,10 +13,29 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.cm import ScalarMappable
+from matplotlib.legend_handler import HandlerPatch
+from matplotlib.lines import Line2D
+from matplotlib.patches import Wedge, Circle
 from matplotlib.ticker import FuncFormatter
 from scipy.stats import mannwhitneyu
 from shear_multi import mp_running, init_worker
 
+
+class HandlerHalfCircle(HandlerPatch):
+    def create_artists(self, legend, orig_handle,
+                       xdescent, ydescent, width, height, fontsize, trans):
+
+        center = (width/2 - xdescent, height/2 - ydescent)
+        r = min(width, height) / 1.6
+
+        red = Wedge(center, r, 90, 270, facecolor='red', edgecolor='none')
+        blue = Wedge(center, r, -90, 90, facecolor='blue', edgecolor='none')
+        outline = Circle(center, r, facecolor='none', edgecolor='black', lw=0.5)
+
+        for a in (red, blue, outline):
+            a.set_transform(trans)
+
+        return [red, blue, outline]
 
 def label_every_20(x, pos):
     """
@@ -305,7 +324,35 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
     x_masked = x_flat[mask]
     y_masked = y_flat[mask]
     # Plot only black dots for z < 0.05
-    ax.scatter(x_masked, y_masked, c='black', s=150, label='p < 0.05')
+    # --- classification masks ---
+    high_mask = (x_masked > 30) | (y_masked > 30)
+    low_mask = (x_masked < -20) | (y_masked < -20)
+
+    both_mask = high_mask & low_mask
+    red_mask = high_mask & ~low_mask
+    blue_mask = low_mask & ~high_mask
+    black_mask = ~(high_mask | low_mask)
+
+    # --- normal markers ---
+    ax.scatter(x_masked[red_mask], y_masked[red_mask], c='red', s=150, label='> 30 kt bin')
+    ax.scatter(x_masked[blue_mask], y_masked[blue_mask], c='blue', s=150, label='< -20 kt bin')
+    ax.scatter(x_masked[black_mask], y_masked[black_mask], c='black', s=150, label='Other (p < 0.05)')
+
+    for x_val, y_val in zip(x_masked[both_mask], y_masked[both_mask]):
+        marker_size = np.sqrt(150)
+
+        ax.plot(
+            x_val, y_val,
+            marker='o',
+            markersize=marker_size,
+            markerfacecolor='red',  # left half
+            markerfacecoloralt='blue',  # right half
+            markeredgecolor='black',
+            markeredgewidth=1,
+            fillstyle='left',
+            linestyle='None',
+            zorder=3
+        )
     ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=14)
     ax.set_yticklabels(labels, fontsize=14)
     if '6' in label:
@@ -346,9 +393,32 @@ fig.subplots_adjust(
     hspace=0.4,  # vertical spacing between rows
     wspace=0.15  # horizontal spacing between columns
 )
-handles, labels = axes[0, 0].get_legend_handles_labels()
-by_label = dict(zip(labels, handles))  # removes duplicates
-fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=20)
+half_circle = Circle((0,0), 1)
+
+legend_handles = [
+    Line2D([0],[0], marker='o', color='w', markerfacecolor='red',
+           markersize=12, label='p<0.05 (RI)'),
+    Line2D([0],[0], marker='o', color='w', markerfacecolor='blue',
+           markersize=12, label='p<0.05 (RW)'),
+    half_circle,
+    Line2D([0],[0], marker='o', color='w', markerfacecolor='black',
+           markersize=12, label='Other (p < 0.05)')
+]
+
+legend_labels = [
+    'p<0.05 (RI)',
+    'p<0.05 (RW)',
+    'p<0.05 (RI & RW)',
+    'p<0.05'
+]
+
+fig.legend(
+    legend_handles,
+    legend_labels,
+    handler_map={half_circle: HandlerHalfCircle()},
+    loc='upper right',
+    fontsize=12
+)
 # Adjust spacing to make room for colorbar at the bottom
 
 # Create a new axis for the horizontal colorbar that spans the full width
@@ -484,7 +554,35 @@ for z, (ax, data, label, labels) in enumerate(zip(axes_col_major, data_list, lab
     x_masked = x_flat[mask]
     y_masked = y_flat[mask]
     # Plot only black dots for z < 0.05
-    ax.scatter(x_masked, y_masked, c='black', s=150, label='p < 0.05')
+    # --- classification masks ---
+    high_mask = (x_masked > 30) | (y_masked > 30)
+    low_mask = (x_masked < -20) | (y_masked < -20)
+
+    both_mask = high_mask & low_mask
+    red_mask = high_mask & ~low_mask
+    blue_mask = low_mask & ~high_mask
+    black_mask = ~(high_mask | low_mask)
+
+    # --- normal markers ---
+    ax.scatter(x_masked[red_mask], y_masked[red_mask], c='red', s=150, label='> 30 kt bin')
+    ax.scatter(x_masked[blue_mask], y_masked[blue_mask], c='blue', s=150, label='< -20 kt bin')
+    ax.scatter(x_masked[black_mask], y_masked[black_mask], c='black', s=150, label='Other (p < 0.05)')
+
+    for x_val, y_val in zip(x_masked[both_mask], y_masked[both_mask]):
+        marker_size = np.sqrt(150)
+
+        ax.plot(
+            x_val, y_val,
+            marker='o',
+            markersize=marker_size,
+            markerfacecolor='red',  # left half
+            markerfacecoloralt='blue',  # right half
+            markeredgecolor='black',
+            markeredgewidth=1,
+            fillstyle='left',
+            linestyle='None',
+            zorder=3
+        )
     ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=14)
     ax.set_yticklabels(labels, fontsize=14)
     if '6' in label:
@@ -526,9 +624,32 @@ fig.subplots_adjust(
     hspace=0.4,  # vertical spacing between rows
     wspace=0.15  # horizontal spacing between columns
 )
-handles, labels = axes[0, 0].get_legend_handles_labels()
-by_label = dict(zip(labels, handles))  # removes duplicates
-fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=20)
+half_circle = Circle((0,0), 1)
+
+legend_handles = [
+    Line2D([0],[0], marker='o', color='w', markerfacecolor='red',
+           markersize=12, label='p<0.05 (RI)'),
+    Line2D([0],[0], marker='o', color='w', markerfacecolor='blue',
+           markersize=12, label='p<0.05 (RW)'),
+    half_circle,
+    Line2D([0],[0], marker='o', color='w', markerfacecolor='black',
+           markersize=12, label='Other (p < 0.05)')
+]
+
+legend_labels = [
+    'p<0.05 (RI)',
+    'p<0.05 (RW)',
+    'p<0.05 (RI & RW)',
+    'p<0.05'
+]
+
+fig.legend(
+    legend_handles,
+    legend_labels,
+    handler_map={half_circle: HandlerHalfCircle()},
+    loc='upper right',
+    fontsize=12
+)
 # Adjust spacing to make room for colorbar at the bottom
 
 # Create a new axis for the horizontal colorbar that spans the full width

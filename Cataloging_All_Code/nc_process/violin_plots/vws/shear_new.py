@@ -14,8 +14,19 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.cm import ScalarMappable
+from matplotlib.lines import Line2D
 from scipy.stats import mannwhitneyu
 from shear_multi import mp_running, init_worker
+
+
+def shear_color(vws):
+    """Return color based on vertical wind shear regime."""
+    if vws < 5:
+        return 'green'      # Low shear
+    elif vws <= 10:
+        return 'orange'     # Moderate shear
+    else:
+        return 'red'        # High shear
 
 def group_func(data: list, group_labels: list) -> list:
     """
@@ -243,7 +254,25 @@ def plot_contourf_2panel_shear(data1: list, labels1: list, data2: list, labels2:
     mask = z_flat < 0.05
     x_masked = x_flat[mask]
     y_masked = y_flat[mask]
-    axes[0].scatter(x_masked, y_masked, c='black', s=200, label='p < 0.05')
+    for x_val, y_val in zip(x_masked, y_masked):
+        color_x = shear_color(x_val)
+        color_y = shear_color(y_val)
+
+        # Convert scatter size (~250) to plot marker size
+        marker_size = np.sqrt(250)
+
+        axes[0].plot(
+            x_val, y_val,
+            marker='o',
+            markersize=marker_size,
+            markerfacecolor=color_x,      # left half
+            markerfacecoloralt=color_y,   # right half
+            markeredgecolor='black',
+            markeredgewidth=1.5,
+            fillstyle='left',
+            linestyle='None',
+            zorder=3
+        )
     axes[0].set_xlim((-5, 35))
     axes[0].set_ylim((-5, 35))
     axes[0].set_xticks(tick_marks)
@@ -262,7 +291,25 @@ def plot_contourf_2panel_shear(data1: list, labels1: list, data2: list, labels2:
     mask = z_flat < 0.05
     x_masked = x_flat[mask]
     y_masked = y_flat[mask]
-    axes[1].scatter(x_masked, y_masked, c='black', s=200, label='p < 0.05')
+    for x_val, y_val in zip(x_masked, y_masked):
+        color_x = shear_color(x_val)
+        color_y = shear_color(y_val)
+
+        # Convert scatter size (~250) to plot marker size
+        marker_size = np.sqrt(250)
+
+        axes[1].plot(
+            x_val, y_val,
+            marker='o',
+            markersize=marker_size,
+            markerfacecolor=color_x,  # left half
+            markerfacecoloralt=color_y,  # right half
+            markeredgecolor='black',
+            markeredgewidth=1.5,
+            fillstyle='left',
+            linestyle='None',
+            zorder=3
+        )
     axes[1].set_xlim((-5, 35))
     axes[1].set_ylim((-5, 35))
     axes[1].set_xticks(tick_marks)
@@ -279,9 +326,15 @@ def plot_contourf_2panel_shear(data1: list, labels1: list, data2: list, labels2:
     fig.supylabel(ylabel, fontsize=28, x=0.05)
 
     # Add legend
-    handles, labels = axes[0].get_legend_handles_labels()
-    by_label = dict(zip(labels, handles))
-    fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=20, framealpha=0)
+
+    legend_elements = [
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='green', markersize=12, label='<5 m/s (Low Shear)'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='orange', markersize=12,
+               label='5–10 m/s (Moderate Shear)'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=12, label='>10 m/s (High Shear)')
+    ]
+
+    fig.legend(handles=legend_elements, loc='upper right', fontsize=12, framealpha=0)
     plt.savefig(filename)
     return fig, axes
 

@@ -293,7 +293,35 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
     x_masked = x_flat[mask]
     y_masked = y_flat[mask]
     # Plot only black dots for z < 0.05
-    ax.scatter(x_masked, y_masked, c='black', s=150, label='p < 0.05')
+    # --- classification masks ---
+    high_mask = (x_masked > 30) | (y_masked > 30)
+    low_mask = (x_masked < -20) | (y_masked < -20)
+
+    both_mask = high_mask & low_mask
+    red_mask = high_mask & ~low_mask
+    blue_mask = low_mask & ~high_mask
+    black_mask = ~(high_mask | low_mask)
+
+    # --- normal markers ---
+    ax.scatter(x_masked[red_mask], y_masked[red_mask], c='red', s=150, label='> 30 kt bin')
+    ax.scatter(x_masked[blue_mask], y_masked[blue_mask], c='blue', s=150, label='< -20 kt bin')
+    ax.scatter(x_masked[black_mask], y_masked[black_mask], c='black', s=150, label='Other (p < 0.05)')
+
+    for x_val, y_val in zip(x_masked[both_mask], y_masked[both_mask]):
+        marker_size = np.sqrt(150)
+
+        ax.plot(
+            x_val, y_val,
+            marker='o',
+            markersize=marker_size,
+            markerfacecolor='red',  # left half
+            markerfacecoloralt='blue',  # right half
+            markeredgecolor='black',
+            markeredgewidth=1,
+            fillstyle='left',
+            linestyle='None',
+            zorder=3
+        )
     ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=14)
     ax.set_yticklabels(labels, fontsize=14)
     if '6' in label:
@@ -332,9 +360,32 @@ fig.subplots_adjust(
     bottom=0.25,  # space for supxlabel
     top=0.85,  # space for suptitle
 )
-handles, labels = axes[0].get_legend_handles_labels()
-by_label = dict(zip(labels, handles))  # removes duplicates
-fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=16)
+half_circle = Circle((0,0), 1)
+
+legend_handles = [
+    Line2D([0],[0], marker='o', color='w', markerfacecolor='red',
+           markersize=12, label='p<0.05 (RI)'),
+    Line2D([0],[0], marker='o', color='w', markerfacecolor='blue',
+           markersize=12, label='p<0.05 (RW)'),
+    half_circle,
+    Line2D([0],[0], marker='o', color='w', markerfacecolor='black',
+           markersize=12, label='Other (p < 0.05)')
+]
+
+legend_labels = [
+    'p<0.05 (RI)',
+    'p<0.05 (RW)',
+    'p<0.05 (RI & RW)',
+    'p<0.05'
+]
+
+fig.legend(
+    legend_handles,
+    legend_labels,
+    handler_map={half_circle: HandlerHalfCircle()},
+    loc='upper right',
+    fontsize=12
+)
 # Adjust spacing to make room for colorbar at the bottom
 
 # Create a new axis for the horizontal colorbar that spans the full width
@@ -446,7 +497,6 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
 
     # Compute p-value matrix
     p_grid = compute_pval_grid(data)
-
     # Create contourf plot
     x, y = np.meshgrid(labels, labels)
     z_pgrid = p_grid
@@ -458,7 +508,35 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
     x_masked = x_flat[mask]
     y_masked = y_flat[mask]
     # Plot only black dots for z < 0.05
-    ax.scatter(x_masked, y_masked, c='black', s=150, label='p < 0.05')
+    # --- classification masks ---
+    high_mask = (x_masked > 30) | (y_masked > 30)
+    low_mask = (x_masked < -20) | (y_masked < -20)
+
+    both_mask = high_mask & low_mask
+    red_mask = high_mask & ~low_mask
+    blue_mask = low_mask & ~high_mask
+    black_mask = ~(high_mask | low_mask)
+
+    # --- normal markers ---
+    ax.scatter(x_masked[red_mask], y_masked[red_mask], c='red', s=150, label='> 30 kt bin')
+    ax.scatter(x_masked[blue_mask], y_masked[blue_mask], c='blue', s=150, label='< -20 kt bin')
+    ax.scatter(x_masked[black_mask], y_masked[black_mask], c='black', s=150, label='Other (p < 0.05)')
+
+    for x_val, y_val in zip(x_masked[both_mask], y_masked[both_mask]):
+        marker_size = np.sqrt(150)
+
+        ax.plot(
+            x_val, y_val,
+            marker='o',
+            markersize=marker_size,
+            markerfacecolor='red',  # left half
+            markerfacecoloralt='blue',  # right half
+            markeredgecolor='black',
+            markeredgewidth=1,
+            fillstyle='left',
+            linestyle='None',
+            zorder=3
+        )
     ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=14)
     ax.set_yticklabels(labels, fontsize=14)
     if '6' in label:
@@ -476,7 +554,7 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
     elif '24' in label:
         ax.set_xlim((-105, 85))
         ax.set_ylim((-105, 85))
-        ax.set_xticks(range(-100, 81, 20))
+        tick_marks = range(-100, 81, 20)
     ax.set_xticks(tick_marks)
     ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
     ax.set_yticks(tick_marks)
@@ -500,9 +578,32 @@ fig.subplots_adjust(
     hspace=0.4,  # vertical spacing between rows
     wspace=0.3  # horizontal spacing between columns
 )
-handles, labels = axes[0].get_legend_handles_labels()
-by_label = dict(zip(labels, handles))  # removes duplicates
-fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=16)
+half_circle = Circle((0,0), 1)
+
+legend_handles = [
+    Line2D([0],[0], marker='o', color='w', markerfacecolor='red',
+           markersize=12, label='p<0.05 (RI)'),
+    Line2D([0],[0], marker='o', color='w', markerfacecolor='blue',
+           markersize=12, label='p<0.05 (RW)'),
+    half_circle,
+    Line2D([0],[0], marker='o', color='w', markerfacecolor='black',
+           markersize=12, label='Other (p < 0.05)')
+]
+
+legend_labels = [
+    'p<0.05 (RI)',
+    'p<0.05 (RW)',
+    'p<0.05 (RI & RW)',
+    'p<0.05'
+]
+
+fig.legend(
+    legend_handles,
+    legend_labels,
+    handler_map={half_circle: HandlerHalfCircle()},
+    loc='upper right',
+    fontsize=12
+)
 # Adjust spacing to make room for colorbar at the bottom
 
 # Create a new axis for the horizontal colorbar that spans the full width
