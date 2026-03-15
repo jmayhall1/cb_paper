@@ -407,7 +407,7 @@ fig.legend(
     legend_labels,
     handler_map={half_circle: HandlerHalfCircle()},
     loc='upper right',
-    fontsize=12
+    fontsize=8
 )
 # Adjust spacing to make room for colorbar at the bottom
 
@@ -625,7 +625,7 @@ fig.legend(
     legend_labels,
     handler_map={half_circle: HandlerHalfCircle()},
     loc='upper right',
-    fontsize=12
+    fontsize=9
 )
 # Adjust spacing to make room for colorbar at the bottom
 
