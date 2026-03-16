@@ -26,7 +26,7 @@ class HandlerHalfCircle(HandlerPatch):
                        xdescent, ydescent, width, height, fontsize, trans):
 
         center = (width / 2 - xdescent, height / 2 - ydescent)
-        radius = min(width, height) / 2
+        radius = min(width, height) / 1.6
 
         # Left half (red)
         left = Wedge(center, radius, 90, 270,
