@@ -13,9 +13,29 @@ import matplotlib.patheffects as path_effects
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.lines import Line2D
 from scipy.stats import mannwhitneyu
 from shear_multi import mp_running, init_worker
 
+
+def sst_color(val):
+    """Return color based on SST regime."""
+    if val < 26:
+        return 'blue'      # Low SST
+    elif val <= 28:
+        return 'yellow'     # Moderate SST
+    else:
+        return 'red'        # High SST
+
+
+def rh_color(val):
+    """Return color based on RH regime."""
+    if val < 50:
+        return 'brown'      # Dry
+    elif val <= 70:
+        return 'orange'     # Moderate
+    else:
+        return 'green'        # Moist
 
 def adjacent_values(sorted_array, q1, q3):
     """Calculate adjacent values for whiskers in box/violin plots."""
@@ -227,7 +247,24 @@ def plot_contourf_2panel(data1: list, labels1: list, data2: list, labels2: list,
     mask = z_flat < 0.05
     x_masked = x_flat[mask]
     y_masked = y_flat[mask]
-    axes[0].scatter(x_masked, y_masked, c='black', s=200, label='p < 0.05')
+    for x_val, y_val in zip(x_masked, y_masked):
+        color_x = sst_color(x_val)
+        color_y = sst_color(y_val)
+
+        marker_size = np.sqrt(250)
+
+        axes[0].plot(
+            x_val, y_val,
+            marker='o',
+            markersize=marker_size,
+            markerfacecolor=color_x,
+            markerfacecoloralt=color_y,
+            markeredgecolor='black',
+            markeredgewidth=1.5,
+            fillstyle='left',
+            linestyle='None',
+            zorder=3
+        )
     axes[0].set_xlim((17, 33))
     axes[0].set_ylim((17, 33))
     axes[0].set_xticks(tick_marks)
@@ -247,7 +284,24 @@ def plot_contourf_2panel(data1: list, labels1: list, data2: list, labels2: list,
     mask = z_flat < 0.05
     x_masked = x_flat[mask]
     y_masked = y_flat[mask]
-    axes[1].scatter(x_masked, y_masked, c='black', s=200, label='p < 0.05')
+    for x_val, y_val in zip(x_masked, y_masked):
+        color_x = sst_color(x_val)
+        color_y = sst_color(y_val)
+
+        marker_size = np.sqrt(250)
+
+        axes[1].plot(
+            x_val, y_val,
+            marker='o',
+            markersize=marker_size,
+            markerfacecolor=color_x,
+            markerfacecoloralt=color_y,
+            markeredgecolor='black',
+            markeredgewidth=1.5,
+            fillstyle='left',
+            linestyle='None',
+            zorder=3
+        )
     axes[1].set_xlim((17, 33))
     axes[1].set_ylim((17, 33))
     axes[1].set_xticks(tick_marks)
@@ -265,9 +319,14 @@ def plot_contourf_2panel(data1: list, labels1: list, data2: list, labels2: list,
     fig.supylabel(ylabel, fontsize=28, x=0.05)
 
     # Add legend
-    handles, labels = axes[0].get_legend_handles_labels()
-    by_label = dict(zip(labels, handles))
-    fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=20, framealpha=0)
+
+    legend_elements = [
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='blue', markersize=12, label='<26°C'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='yellow', markersize=12, label='26–28°C'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=12, label='>28°C')
+    ]
+
+    fig.legend(handles=legend_elements, loc='upper right', fontsize=12, framealpha=0)
     plt.savefig(filename, dpi=300, bbox_inches="tight")
     return fig, axes
 
@@ -480,7 +539,27 @@ if __name__ == '__main__':
             X, Y = np.meshgrid(x, y)
 
             mask = pvals < 0.05
-            axes[row, col].scatter(X[mask], Y[mask], c='black', s=200, label='p < 0.05')
+            x_vals = X[mask]
+            y_vals = Y[mask]
+
+            for x_val, y_val in zip(x_vals, y_vals):
+                color_x = rh_color(x_val)
+                color_y = rh_color(y_val)
+
+                marker_size = np.sqrt(250)
+
+                axes[row, col].plot(
+                    x_val, y_val,
+                    marker='o',
+                    markersize=marker_size,
+                    markerfacecolor=color_x,
+                    markerfacecoloralt=color_y,
+                    markeredgecolor='black',
+                    markeredgewidth=1.5,
+                    fillstyle='left',
+                    linestyle='None',
+                    zorder=3
+                )
             axes[row, col].set_title(f'{basin}: {rh_titles[col]}', fontsize=24)
             axes[row, col].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
             axes[row, col].set_xlim(rh_lims[col][0] - 5, rh_lims[col][1] + 4)
@@ -492,9 +571,14 @@ if __name__ == '__main__':
     fig.suptitle('RH Mann–Whitney P-Values', fontsize=28)
     fig.supxlabel('RH (%)', fontsize=28)
     fig.supylabel('RH (%)', fontsize=28)
-    handles, labels = axes[0, 0].get_legend_handles_labels()
-    by_label = dict(zip(labels, handles))
-    fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=28, framealpha=0)
+    legend_elements = [
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='brown', markersize=12, label='<50%'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='orange', markersize=12, label='50–70%'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='green', markersize=12, label='>70%')
+    ]
+
+    fig.legend(legend_elements, [l.get_label() for l in legend_elements],
+               loc='upper right', fontsize=18, framealpha=0)
 
     plt.savefig('rh_ALEP_mannwhitney.png', dpi=300, bbox_inches="tight")
     plt.close()

@@ -19,6 +19,20 @@ from scipy.stats import mannwhitneyu
 from shear_multi import mp_running, init_worker
 
 
+def diurnal_color(hour):
+    """Map 3-hour bin center to diurnal regime color."""
+    hour = int(hour) % 24
+
+    if 0 <= hour < 6:
+        return 'navy'       # 0–5
+    elif 6 <= hour < 12:
+        return 'gold'       # 6–11
+    elif 12 <= hour < 18:
+        return 'orange'     # 12–17
+    else:
+        return 'purple'     # 18–23
+
+
 def intensity_color(intensity):
     """Return color based on TC intensity regime."""
     if intensity < 70:
@@ -266,7 +280,24 @@ def plot_contourf_2panel_diurnal(data1: list, labels1: list, data2: list, labels
     mask = z_flat < 0.05
     x_masked = x_flat[mask]
     y_masked = y_flat[mask]
-    axes[0].scatter(x_masked, y_masked, c='black', s=200, label='p < 0.05')
+    for x_val, y_val in zip(x_masked, y_masked):
+        color_x = diurnal_color(x_val)
+        color_y = diurnal_color(y_val)
+
+        marker_size = np.sqrt(250)
+
+        axes[0].plot(
+            x_val, y_val,
+            marker='o',
+            markersize=marker_size,
+            markerfacecolor=color_x,
+            markerfacecoloralt=color_y,
+            markeredgecolor='black',
+            markeredgewidth=1.2,
+            fillstyle='left',
+            linestyle='None',
+            zorder=3
+        )
     axes[0].set_xlim((-1, 22))
     axes[0].set_ylim((-1, 22))
     axes[0].set_xticks(tick_marks)
@@ -286,7 +317,24 @@ def plot_contourf_2panel_diurnal(data1: list, labels1: list, data2: list, labels
     mask = z_flat < 0.05
     x_masked = x_flat[mask]
     y_masked = y_flat[mask]
-    axes[1].scatter(x_masked, y_masked, c='black', s=200, label='p < 0.05')
+    for x_val, y_val in zip(x_masked, y_masked):
+        color_x = diurnal_color(x_val)
+        color_y = diurnal_color(y_val)
+
+        marker_size = np.sqrt(250)
+
+        axes[1].plot(
+            x_val, y_val,
+            marker='o',
+            markersize=marker_size,
+            markerfacecolor=color_x,
+            markerfacecoloralt=color_y,
+            markeredgecolor='black',
+            markeredgewidth=1.2,
+            fillstyle='left',
+            linestyle='None',
+            zorder=3
+        )
     axes[1].set_xlim((-1, 23))
     axes[1].set_ylim((-1, 23))
     axes[1].set_xticks(tick_marks)
@@ -304,9 +352,14 @@ def plot_contourf_2panel_diurnal(data1: list, labels1: list, data2: list, labels
     fig.supylabel(ylabel, fontsize=28, x=0.05)
 
     # Add legend
-    handles, labels = axes[0].get_legend_handles_labels()
-    by_label = dict(zip(labels, handles))
-    fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=20, framealpha=0)
+    legend_elements = [
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='navy', markersize=12, label='Overnight'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='gold', markersize=12, label='Morning'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='orange', markersize=12, label='Afternoon'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='purple', markersize=12, label='Evening')
+    ]
+
+    fig.legend(handles=legend_elements, loc='upper right', fontsize=20, framealpha=0)
     plt.savefig(filename)
     return fig, axes
 
