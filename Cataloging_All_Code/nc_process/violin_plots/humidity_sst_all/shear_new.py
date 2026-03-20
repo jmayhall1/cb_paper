@@ -326,7 +326,7 @@ def plot_contourf_2panel(data1: list, labels1: list, data2: list, labels2: list,
         Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=12, label='>28°C')
     ]
 
-    fig.legend(handles=legend_elements, loc='upper right', fontsize=12, framealpha=0)
+    fig.legend(handles=legend_elements, loc='upper right', fontsize=16, framealpha=0)
     plt.savefig(filename, dpi=300, bbox_inches="tight")
     return fig, axes
 
@@ -578,7 +578,7 @@ if __name__ == '__main__':
     ]
 
     fig.legend(legend_elements, [l.get_label() for l in legend_elements],
-               loc='upper right', fontsize=18, framealpha=0)
+               loc='upper right', fontsize=24, framealpha=0)
 
     plt.savefig('rh_ALEP_mannwhitney.png', dpi=300, bbox_inches="tight")
     plt.close()

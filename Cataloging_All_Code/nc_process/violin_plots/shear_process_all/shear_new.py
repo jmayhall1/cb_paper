@@ -24,13 +24,13 @@ def diurnal_color(hour):
     hour = int(hour) % 24
 
     if 0 <= hour < 6:
-        return 'navy'       # 0–5
+        return 'black'       # 0–5
     elif 6 <= hour < 12:
-        return 'gold'       # 6–11
+        return 'orange'       # 6–11
     elif 12 <= hour < 18:
-        return 'orange'     # 12–17
+        return 'blue'     # 12–17
     else:
-        return 'purple'     # 18–23
+        return 'magenta'     # 18–23
 
 
 def intensity_color(intensity):
@@ -353,10 +353,10 @@ def plot_contourf_2panel_diurnal(data1: list, labels1: list, data2: list, labels
 
     # Add legend
     legend_elements = [
-        Line2D([0], [0], marker='o', color='w', markerfacecolor='navy', markersize=12, label='Overnight'),
-        Line2D([0], [0], marker='o', color='w', markerfacecolor='gold', markersize=12, label='Morning'),
-        Line2D([0], [0], marker='o', color='w', markerfacecolor='orange', markersize=12, label='Afternoon'),
-        Line2D([0], [0], marker='o', color='w', markerfacecolor='purple', markersize=12, label='Evening')
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='black', markersize=12, label='Overnight'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='orange', markersize=12, label='Morning'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='blue', markersize=12, label='Afternoon'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='magenta', markersize=12, label='Evening')
     ]
 
     fig.legend(handles=legend_elements, loc='upper right', fontsize=20, framealpha=0)
