@@ -49,6 +49,8 @@ class Plotting:
             subplot_kw={'polar': True},
             figsize=(15, 10)
         )
+        if self.columns == 4:
+            fig.subplots_adjust(wspace=0.4)
         axes = axes.flatten()
 
         # Shared interpolation grid
@@ -67,40 +69,65 @@ class Plotting:
             data = self.data_group[i]
             data = data[data['Radius'] <= 1024]
 
-            # Convert to float32 for memory efficiency
             theta = (data[self.plot_type].values * np.pi / 180).astype(np.float32)
             radius = data['Radius'].values.astype(np.float32)
             count = data['Frequency'].values.astype(np.float32)
 
-            # Grid interpolation using cubic method
+            # Add a copy of the data at both ends for periodicity
+            theta_ext = np.concatenate([theta - 2 * np.pi, theta, theta + 2 * np.pi])
+            radius_ext = np.concatenate([radius, radius, radius])
+            count_ext = np.concatenate([count, count, count])
+
+            # Grid interpolation
             count_grid = scipy.interpolate.griddata(
-                (theta, radius),
-                count,
+                (theta_ext, radius_ext),  # use extended theta and radius
+                count_ext,  # extended count
                 (theta_mesh, radius_mesh),
                 method='cubic',
                 rescale=True
             )
-
-            # Replace NaNs and clip values to [0, max_tick]
-            nan_val = 0
-            count_grid = np.nan_to_num(count_grid, nan=nan_val)
+            count_grid = np.nan_to_num(count_grid, nan=0)
             np.clip(count_grid, 0, level_ticks.max(), out=count_grid)
 
-            # Plot heatmap on polar subplot
+            # Plot heatmap
             ax.contourf(theta_mesh, radius_mesh, count_grid, levels, cmap='turbo',
                         vmin=level_ticks.min(), vmax=level_ticks.max())
 
-            # Set polar plot orientation and styling
+            # Set polar orientation
             ax.set_theta_zero_location('N')
             ax.set_theta_direction(-1)
-            ax.tick_params(axis='y', labelsize=14, colors='black')
+            ax.set_ylim(0, 1024)
 
-            # Apply white outline to tick labels for better visibility
+            # Radial ticks (labels visible)
+            ax.set_yticks([200, 400, 600, 800, 1000])
+            ax.tick_params(axis='y', labelsize=16, colors='black', pad=15)
+            ax.tick_params(axis='x', labelsize=14)
+
+            # Dense theta for smooth rings
+            theta_dense = np.linspace(0, 2 * np.pi, 600)
+
+            # Path effect for black line with white outline
+            ring_effect = [pe.withStroke(linewidth=2.5, foreground='white')]
+
+            for r in ax.get_yticks():
+                if r == 0:
+                    continue
+                line, = ax.plot(
+                    theta_dense,
+                    np.full_like(theta_dense, r),
+                    color='black',  # base line color
+                    linewidth=1,  # desired width
+                    alpha=0.9,
+                    zorder=2
+                )
+                line.set_path_effects(ring_effect)  # apply white outline
+
+            # White outline for tick labels
             outline_effect = [pe.withStroke(linewidth=3, foreground='white')]
             for label in ax.get_xticklabels() + ax.get_yticklabels():
                 label.set_path_effects(outline_effect)
+                label.set_zorder(10)
 
-            # Set subplot title
             ax.set_title(self.title_dict.get(i, f'Plot {i}'), fontsize=16)
 
         # Shared colorbar setup
