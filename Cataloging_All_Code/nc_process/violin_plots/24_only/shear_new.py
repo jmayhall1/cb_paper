@@ -26,7 +26,7 @@ class HandlerHalfCircle(HandlerPatch):
                        xdescent, ydescent, width, height, fontsize, trans):
 
         center = (width / 2 - xdescent, height / 2 - ydescent)
-        radius = min(width, height) / 1.6
+        radius = min(width, height) / 1.45
 
         # Left half (red)
         left = Wedge(center, radius, 90, 270,
@@ -214,12 +214,12 @@ labels_list = [f"{h}hr" for h in past_hours] + [f"{h}hr" for h in past_hours]
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 8))
 fig.suptitle('TCB Occurrences vs Previous TC Intensity Change',
-             fontsize=24, y=1)
+             fontsize=24, y=1.05)
 fig.supxlabel(r'TC Wind Speed Change ($\frac{{dv}}{{dt}}$)', fontsize=24)
 fig.supylabel('Percentage of Pixels with TCBs', fontsize=24)
 for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, labels_list, x_labels)):
     labels = np.unique(np.concatenate([np.array(sublist) for sublist in labels]))
-    ax.tick_params(axis='both', labelsize=16)
+    ax.tick_params(axis='both', labelsize=18)
     parts = ax.violinplot(data, positions=labels, showmeans=False, showmedians=False, showextrema=False, widths=8)
 
     for pc in parts['bodies']:
@@ -269,15 +269,15 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
     for i, d in enumerate(data):
         offset = y_offset if i % 2 == 0 else -1 * y_offset
         text_y = min(max(d) + offset, fig_ylim_top - 0.05 * (ymax - ymin))  # small buffer
-        ax.text(labels[i], text_y, f'{len(d)}', ha='center', fontsize=16, fontweight='bold', rotation=90, va='center',
+        ax.text(labels[i], text_y, f'{len(d)}', ha='center', fontsize=20, fontweight='bold', rotation=90, va='center',
                 path_effects=[path_effects.Stroke(linewidth=2, foreground='white'), path_effects.Normal()])
     ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
     ax.axvline(x=-20, color='blue', linestyle='--', lw=2, label='RW Transition')
     ax.axvline(x=30, color='magenta', linestyle='--', lw=2, label='RI Transition')
     if z == 0:
-        ax.set_title(f'Intensity Change over\n the Previous {label[1:-2]} Hours ' + rf'(Atlantic, kt {label[1:]}$^{{-1}}$)', fontsize=16)
+        ax.set_title(f'Intensity Change over\n the Previous {label[1:-2]} Hours ' + rf'(Atlantic, kt {label[1:]}$^{{-1}}$)', fontsize=20)
     else:
-        ax.set_title(f'Intensity Change over\n the Previous {label[1:-2]} Hours ' + rf'(Eastern Pacific, kt {label[1:]}$^{{-1}}$)', fontsize=16)
+        ax.set_title(f'Intensity Change over\n the Previous {label[1:-2]} Hours ' + rf'(Eastern Pacific, kt {label[1:]}$^{{-1}}$)', fontsize=20)
 
     # Add legend after the lines are drawn
 fig.subplots_adjust(
@@ -289,13 +289,13 @@ fig.subplots_adjust(
     wspace=0.3  # horizontal spacing between columns
 )
 handles, labels = ax.get_legend_handles_labels()
-legend = fig.legend(handles, labels, loc='upper right', fontsize=12)
-legend.set_alpha(0.4)
+legend = fig.legend(handles, labels, loc='lower right', fontsize=15)
+legend.set_alpha(0)
 plt.savefig('prev_intensity_change_ALEP.png')
 plt.close()
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-fig.suptitle('Previous TC Intensity Change Mann-Whitney P-Values', fontsize=24, y=1)
+fig.suptitle('Previous TC Intensity Change Mann-Whitney P-Values', fontsize=24, y=1.05)
 fig.supxlabel(r'TC Wind Speed Change ($\frac{dv}{dt}$)', fontsize=24, y=0.07)
 fig.supylabel(r'TC Wind Speed Change ($\frac{dv}{dt}$)', fontsize=24, x=0.05)
 
@@ -345,8 +345,8 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
             linestyle='None',
             zorder=3
         )
-    ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=14)
-    ax.set_yticklabels(labels, fontsize=14)
+    ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=18)
+    ax.set_yticklabels(labels, fontsize=18)
     if '6' in label:
         ax.set_xlim((-65, 45))
         ax.set_ylim((-65, 45))
@@ -369,12 +369,12 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
     plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
     ax.yaxis.set_major_formatter(FuncFormatter(label_every_20))
     plt.setp(ax.get_yticklabels())
-    ax.set_title(f'{label}', fontsize=16)
+    ax.set_title(f'{label}', fontsize=20)
     ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
     if z == 0:
-        ax.set_title(f'Intensity Change over\n the Previous {label[1:-2]} Hours ' + rf'(Atlantic, kt {label[1:]}$^{{-1}}$)', fontsize=16)
+        ax.set_title(f'Intensity Change over\n the Previous {label[1:-2]} Hours ' + rf'(Atlantic, kt {label[1:]}$^{{-1}}$)', fontsize=20)
     else:
-        ax.set_title(f'Intensity Change over\n the Previous {label[1:-2]} Hours ' + rf'(Eastern Pacific, kt {label[1:]}$^{{-1}}$)', fontsize=16)
+        ax.set_title(f'Intensity Change over\n the Previous {label[1:-2]} Hours ' + rf'(Eastern Pacific, kt {label[1:]}$^{{-1}}$)', fontsize=20)
 
 # Add colorbar
 fig.subplots_adjust(
@@ -387,12 +387,12 @@ half_circle = Circle((0,0), 1)
 
 legend_handles = [
     Line2D([0],[0], marker='o', color='w', markerfacecolor='red',
-           markersize=12, label='p<0.05 (RI)'),
+           markersize=18, label='p<0.05 (RI)'),
     Line2D([0],[0], marker='o', color='w', markerfacecolor='blue',
-           markersize=12, label='p<0.05 (RW)'),
+           markersize=18, label='p<0.05 (RW)'),
     half_circle,
     Line2D([0],[0], marker='o', color='w', markerfacecolor='black',
-           markersize=12, label='Other (p < 0.05)')
+           markersize=18, label='Other (p < 0.05)')
 ]
 
 legend_labels = [
@@ -406,8 +406,8 @@ fig.legend(
     legend_handles,
     legend_labels,
     handler_map={half_circle: HandlerHalfCircle()},
-    loc='upper right',
-    fontsize=8
+    loc='lower right',
+    fontsize=16
 )
 # Adjust spacing to make room for colorbar at the bottom
 
@@ -429,12 +429,12 @@ labels_list = [f"{h}hr" for h in future_hours] + [f"{h}hr" for h in future_hours
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 8))
 fig.suptitle('TCB Occurrences vs Future TC Intensity Change',
-             fontsize=24, y=1)
+             fontsize=24, y=1.05)
 fig.supxlabel(r'TC Wind Speed Change ($\frac{{dv}}{{dt}}$)', fontsize=24)
 fig.supylabel('Percentage of Pixels with TCBs', fontsize=24)
 for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, labels_list, x_labels)):
     labels = np.unique(np.concatenate([np.array(sublist) for sublist in labels]))
-    ax.tick_params(axis='both', labelsize=16)
+    ax.tick_params(axis='both', labelsize=18)
     parts = ax.violinplot(data, positions=labels, showmeans=False, showmedians=False, showextrema=False, widths=8)
 
     for pc in parts['bodies']:
@@ -484,15 +484,15 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
     for i, d in enumerate(data):
         offset = y_offset if i % 2 == 0 else -1 * y_offset
         text_y = min(max(d) + offset, fig_ylim_top - 0.05 * (ymax - ymin))  # small buffer
-        ax.text(labels[i], text_y, f'{len(d)}', ha='center', fontsize=16, fontweight='bold', rotation=90, va='center',
+        ax.text(labels[i], text_y, f'{len(d)}', ha='center', fontsize=20, fontweight='bold', rotation=90, va='center',
                 path_effects=[path_effects.Stroke(linewidth=2, foreground='white'), path_effects.Normal()])
     ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
     ax.axvline(x=-20, color='blue', linestyle='--', lw=2, label='RW Transition')
     ax.axvline(x=30, color='magenta', linestyle='--', lw=2, label='RI Transition')
     if z == 0:
-        ax.set_title(f'Intensity Change over\n the Next {label[:-2]} Hours ' + rf'(Atlantic, kt {label}$^{{-1}}$)', fontsize=16)
+        ax.set_title(f'Intensity Change over\n the Next {label[:-2]} Hours ' + rf'(Atlantic, kt {label}$^{{-1}}$)', fontsize=20)
     else:
-        ax.set_title(f'Intensity Change over\n the Next {label[:-2]} Hours ' + rf'(Eastern Pacific, kt {label}$^{{-1}}$)', fontsize=16)
+        ax.set_title(f'Intensity Change over\n the Next {label[:-2]} Hours ' + rf'(Eastern Pacific, kt {label}$^{{-1}}$)', fontsize=20)
 
     # Add legend after the lines are drawn
 fig.subplots_adjust(
@@ -504,13 +504,13 @@ fig.subplots_adjust(
     wspace=0.3  # horizontal spacing between columns
 )
 handles, labels = ax.get_legend_handles_labels()
-legend = fig.legend(handles, labels, loc='upper right', fontsize=12)
-legend.set_alpha(0.4)
+legend = fig.legend(handles, labels, loc='lower right', fontsize=15)
+legend.set_alpha(0)
 plt.savefig('future_intensity_change_ALEP.png')
 plt.close()
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-fig.suptitle('Future TC Intensity Change Mann-Whitney P-Values', fontsize=24, y=1)
+fig.suptitle('Future TC Intensity Change Mann-Whitney P-Values', fontsize=24, y=1.05)
 fig.supxlabel(r'TC Wind Speed Change ($\frac{dv}{dt}$)', fontsize=24, y=0.12)
 fig.supylabel(r'TC Wind Speed Change ($\frac{dv}{dt}$)', fontsize=24, x=0.05)
 
@@ -560,8 +560,8 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
             linestyle='None',
             zorder=3
         )
-    ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=14)
-    ax.set_yticklabels(labels, fontsize=14)
+    ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=18)
+    ax.set_yticklabels(labels, fontsize=18)
     if '6' in label:
         ax.set_xlim((-65, 45))
         ax.set_ylim((-65, 45))
@@ -584,12 +584,12 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
     plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
     ax.yaxis.set_major_formatter(FuncFormatter(label_every_20))
     plt.setp(ax.get_yticklabels())
-    ax.set_title(f'{label}', fontsize=16)
+    ax.set_title(f'{label}', fontsize=20)
     ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
     if z == 0:
-        ax.set_title(f'Intensity Change over\n the Next {label[:-2]} Hours ' + rf'(Atlantic, kt {label}$^{{-1}}$)', fontsize=16)
+        ax.set_title(f'Intensity Change over\n the Next {label[:-2]} Hours ' + rf'(Atlantic, kt {label}$^{{-1}}$)', fontsize=20)
     else:
-        ax.set_title(f'Intensity Change over\n the Next {label[:-2]} Hours ' + rf'(Eastern Pacific, kt {label}$^{{-1}}$)', fontsize=16)
+        ax.set_title(f'Intensity Change over\n the Next {label[:-2]} Hours ' + rf'(Eastern Pacific, kt {label}$^{{-1}}$)', fontsize=20)
 
 # Add colorbar
 # Adjust spacing to make room for colorbar at the bottom
@@ -605,12 +605,12 @@ half_circle = Circle((0,0), 1)
 
 legend_handles = [
     Line2D([0],[0], marker='o', color='w', markerfacecolor='red',
-           markersize=12, label='p<0.05 (RI)'),
+           markersize=18, label='p<0.05 (RI)'),
     Line2D([0],[0], marker='o', color='w', markerfacecolor='blue',
-           markersize=12, label='p<0.05 (RW)'),
+           markersize=18, label='p<0.05 (RW)'),
     half_circle,
     Line2D([0],[0], marker='o', color='w', markerfacecolor='black',
-           markersize=12, label='Other (p < 0.05)')
+           markersize=18, label='Other (p < 0.05)')
 ]
 
 legend_labels = [
@@ -624,8 +624,8 @@ fig.legend(
     legend_handles,
     legend_labels,
     handler_map={half_circle: HandlerHalfCircle()},
-    loc='upper right',
-    fontsize=9
+    loc='lower right',
+    fontsize=16
 )
 # Adjust spacing to make room for colorbar at the bottom
 
