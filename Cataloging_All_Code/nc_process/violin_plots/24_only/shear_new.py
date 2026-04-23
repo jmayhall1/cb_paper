@@ -214,7 +214,7 @@ labels_list = [f"{h}hr" for h in past_hours] + [f"{h}hr" for h in past_hours]
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 8))
 fig.suptitle('TCB Occurrences vs Previous TC Intensity Change',
-             fontsize=24, y=1.05)
+             fontsize=24, y=1)
 fig.supxlabel(r'TC Wind Speed Change ($\frac{{dv}}{{dt}}$)', fontsize=24)
 fig.supylabel('Percentage of Pixels with TCBs', fontsize=24)
 for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, labels_list, x_labels)):
@@ -295,7 +295,7 @@ plt.savefig('prev_intensity_change_ALEP.png')
 plt.close()
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-fig.suptitle('Previous TC Intensity Change Mann-Whitney P-Values', fontsize=24, y=1.05)
+fig.suptitle('Previous TC Intensity Change Mann-Whitney P-Values', fontsize=24, y=1)
 fig.supxlabel(r'TC Wind Speed Change ($\frac{dv}{dt}$)', fontsize=24, y=0.07)
 fig.supylabel(r'TC Wind Speed Change ($\frac{dv}{dt}$)', fontsize=24, x=0.05)
 
@@ -429,7 +429,7 @@ labels_list = [f"{h}hr" for h in future_hours] + [f"{h}hr" for h in future_hours
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 8))
 fig.suptitle('TCB Occurrences vs Future TC Intensity Change',
-             fontsize=24, y=1.05)
+             fontsize=24, y=1)
 fig.supxlabel(r'TC Wind Speed Change ($\frac{{dv}}{{dt}}$)', fontsize=24)
 fig.supylabel('Percentage of Pixels with TCBs', fontsize=24)
 for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, labels_list, x_labels)):
@@ -510,7 +510,7 @@ plt.savefig('future_intensity_change_ALEP.png')
 plt.close()
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-fig.suptitle('Future TC Intensity Change Mann-Whitney P-Values', fontsize=24, y=1.05)
+fig.suptitle('Future TC Intensity Change Mann-Whitney P-Values', fontsize=24, y=1)
 fig.supxlabel(r'TC Wind Speed Change ($\frac{dv}{dt}$)', fontsize=24, y=0.12)
 fig.supylabel(r'TC Wind Speed Change ($\frac{dv}{dt}$)', fontsize=24, x=0.05)
 
