@@ -189,8 +189,10 @@ def plot_violin_2panel(data1, labels1, data2, labels2, suptitle, xlabel, ylabel,
 
         # --- Formatting ---
         ax.set_xlim((17, 33))
-        ax.set_xticks(range(18, 33, 1))
-        ax.set_xticklabels(np.arange(18, 33, 1), rotation=45, ha='right')
+        tick_marks = range(18, 33, 1)
+        labels = [str(t) if i % 2 == 0 else '' for i, t in enumerate(tick_marks)]
+        ax.set_xticks(tick_marks)
+        ax.set_xticklabels(labels, rotation=0)
         ax.set_ylim((0, 60))
         ax.set_title(panel_title, fontsize=28)
         ax.tick_params(axis='both', labelsize=18)
@@ -269,8 +271,9 @@ def plot_contourf_2panel(data1: list, labels1: list, data2: list, labels2: list,
     axes[0].set_ylim((17, 33))
     axes[0].set_xticks(tick_marks)
     axes[0].set_yticks(tick_marks)
-    axes[0].set_xticklabels(tick_marks, rotation=45, ha='right')
-    axes[0].set_yticklabels(tick_marks)
+    labels = [str(t) if i % 2 == 0 else '' for i, t in enumerate(tick_marks)]
+    axes[0].set_xticklabels(labels, rotation=0)
+    axes[0].set_yticklabels(labels)
     axes[0].tick_params(axis='both', labelsize=18)
     axes[0].set_title('Atlantic', fontsize=28)
     axes[0].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
@@ -306,8 +309,9 @@ def plot_contourf_2panel(data1: list, labels1: list, data2: list, labels2: list,
     axes[1].set_ylim((17, 33))
     axes[1].set_xticks(tick_marks)
     axes[1].set_yticks(tick_marks)
-    axes[1].set_xticklabels(tick_marks, rotation=45, ha='right')
-    axes[1].set_yticklabels(tick_marks)
+    labels = [str(t) if i % 2 == 0 else '' for i, t in enumerate(tick_marks)]
+    axes[1].set_xticklabels(labels, rotation=0)
+    axes[1].set_yticklabels(labels)
     axes[1].tick_params(axis='both', labelsize=18)
     axes[1].set_title('Eastern Pacific', fontsize=28)
     axes[1].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)

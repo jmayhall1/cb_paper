@@ -408,13 +408,13 @@ if __name__ == '__main__':
     data_ep, labels_ep = group_func(results_ep['shear_pixel'], results_ep['shear_count'])
     fig1, _ = plot_violin_2panel_shear(data_al, labels_al, data_ep, labels_ep,
                        suptitle='TCB Occurrences vs Vertical Wind Shear',
-                       xlabel=r'Vertical Wind Shear ($\frac{m}{s}$)',
+                       xlabel=r'Vertical Wind Shear ($m s^{-1}$)',
                        ylabel='Percentage of Storm Pixels with TCBs',
                        filename='shear_violin_ALEP.png')
     fig2, _ = plot_contourf_2panel_shear(data_al, labels_al, data_ep, labels_ep,
                          suptitle='TC Vertical Wind Shear Mann-Whitney P-Values',
-                         xlabel=r'Vertical Wind Shear ($\frac{m}{s}$)',
-                         ylabel=r'Vertical Wind Shear ($\frac{m}{s}$)',
+                         xlabel=r'Vertical Wind Shear ($m s^{-1}$)',
+                         ylabel=r'Vertical Wind Shear ($m s^{-1}$)',
                          filename='shear_mannwhitney_ALEP.png')
 
     img1 = fig_to_rgb(fig1)

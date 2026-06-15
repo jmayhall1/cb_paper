@@ -204,7 +204,7 @@ def plot_violin_2panel_diurnal(data1, labels1, data2, labels2, suptitle, xlabel,
         # --- Formatting ---
         ax.set_xlim((-2, 23))
         ax.set_xticks(range(0, 24, 3))
-        ax.set_xticklabels(np.arange(0, 24, 3), rotation=45, ha='right')
+        ax.set_xticklabels(np.arange(0, 24, 3))
         ax.set_ylim((0, 60))
         ax.set_title(panel_title, fontsize=28)
         ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
@@ -302,7 +302,7 @@ def plot_contourf_2panel_diurnal(data1: list, labels1: list, data2: list, labels
     axes[0].set_ylim((-1, 22))
     axes[0].set_xticks(tick_marks)
     axes[0].set_yticks(tick_marks)
-    axes[0].set_xticklabels(tick_marks, rotation=45, ha='right')
+    axes[0].set_xticklabels(tick_marks)
     axes[0].set_yticklabels(tick_marks)
     axes[0].set_title('Atlantic', fontsize=28)
     axes[0].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
@@ -339,7 +339,7 @@ def plot_contourf_2panel_diurnal(data1: list, labels1: list, data2: list, labels
     axes[1].set_ylim((-1, 23))
     axes[1].set_xticks(tick_marks)
     axes[1].set_yticks(tick_marks)
-    axes[1].set_xticklabels(tick_marks, rotation=45, ha='right')
+    axes[1].set_xticklabels(tick_marks)
     axes[1].set_yticklabels(tick_marks)
     axes[1].set_title('Eastern Pacific', fontsize=28)
     axes[1].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
@@ -425,8 +425,11 @@ def plot_violin_2panel_intensity(data1, labels1, data2, labels2, suptitle, xlabe
 
         # --- Formatting ---
         ax.set_xlim((15, 165))
-        ax.set_xticks(range(20, 161, 10))
-        ax.set_xticklabels(np.arange(20, 161, 10), rotation=45, ha='right')
+        ticks = np.arange(20, 161, 10)
+        labels = [str(t) if i % 2 == 0 else '' for i, t in enumerate(ticks)]
+
+        ax.set_xticks(ticks)
+        ax.set_xticklabels(labels, rotation=0)
         ax.set_ylim((0, 60))
         ax.set_title(panel_title, fontsize=28)
         ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
@@ -525,10 +528,11 @@ def plot_contourf_2panel_intensity(data1: list, labels1: list, data2: list, labe
         )
     axes[0].set_xlim((15, 165))
     axes[0].set_ylim((15, 165))
+    labels = [str(t) if i % 2 == 0 else '' for i, t in enumerate(tick_marks)]
     axes[0].set_xticks(tick_marks)
+    axes[0].set_xticklabels(labels, rotation=0)
     axes[0].set_yticks(tick_marks)
-    axes[0].set_xticklabels(tick_marks, rotation=45, ha='right')
-    axes[0].set_yticklabels(tick_marks)
+    axes[0].set_yticklabels(labels)
     axes[0].set_title('Atlantic', fontsize=28)
     axes[0].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
     axes[0].tick_params(axis='both', labelsize=18)
@@ -562,10 +566,11 @@ def plot_contourf_2panel_intensity(data1: list, labels1: list, data2: list, labe
         )
     axes[1].set_xlim((15, 165))
     axes[1].set_ylim((15, 165))
+    labels = [str(t) if i % 2 == 0 else '' for i, t in enumerate(tick_marks)]
     axes[1].set_xticks(tick_marks)
+    axes[1].set_xticklabels(labels, rotation=0)
     axes[1].set_yticks(tick_marks)
-    axes[1].set_xticklabels(tick_marks, rotation=45, ha='right')
-    axes[1].set_yticklabels(tick_marks)
+    axes[1].set_yticklabels(labels)
     axes[1].set_title('Eastern Pacific', fontsize=28)
     axes[1].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
     axes[1].tick_params(axis='both', labelsize=18)

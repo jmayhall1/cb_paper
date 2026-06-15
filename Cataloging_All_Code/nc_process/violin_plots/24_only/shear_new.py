@@ -47,7 +47,7 @@ def label_every_20(x, pos):
     :param x: Tick marks
     :return: Tick labels
     """
-    return f"{int(x)}" if x % 20 == 0 else ''
+    return f"{int(x)}" if x % 40 == 0 else ''
 
 
 def group_func(data: list, group_labels: list):
@@ -258,7 +258,7 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
         ax.set_xlim((-85, 85))
         ax.set_xticks(range(-80, 81, 20))
     ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
-    plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+    plt.setp(ax.get_xticklabels())
     # Ensure there's enough space at the top
     ymin = min([np.min(d) for d in data])
     ymax = max([np.max(d) for d in data])
@@ -345,7 +345,7 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
             linestyle='None',
             zorder=3
         )
-    ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=18)
+    ax.set_xticklabels(labels, fontsize=18)
     ax.set_yticklabels(labels, fontsize=18)
     if '6' in label:
         ax.set_xlim((-65, 45))
@@ -366,7 +366,7 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
     ax.set_xticks(tick_marks)
     ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
     ax.set_yticks(tick_marks)
-    plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+    plt.setp(ax.get_xticklabels())
     ax.yaxis.set_major_formatter(FuncFormatter(label_every_20))
     plt.setp(ax.get_yticklabels())
     ax.set_title(f'{label}', fontsize=20)
@@ -473,7 +473,7 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
         ax.set_xlim((-105, 85))
         ax.set_xticks(range(-100, 81, 20))
     ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
-    plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+    plt.setp(ax.get_xticklabels())
     # Ensure there's enough space at the top
     ymin = min([np.min(d) for d in data])
     ymax = max([np.max(d) for d in data])
@@ -560,7 +560,7 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
             linestyle='None',
             zorder=3
         )
-    ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=18)
+    ax.set_xticklabels(labels, fontsize=18)
     ax.set_yticklabels(labels, fontsize=18)
     if '6' in label:
         ax.set_xlim((-65, 45))
@@ -581,7 +581,7 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
     ax.set_xticks(tick_marks)
     ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
     ax.set_yticks(tick_marks)
-    plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+    plt.setp(ax.get_xticklabels())
     ax.yaxis.set_major_formatter(FuncFormatter(label_every_20))
     plt.setp(ax.get_yticklabels())
     ax.set_title(f'{label}', fontsize=20)
