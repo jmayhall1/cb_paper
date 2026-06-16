@@ -281,10 +281,10 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
 
     # Add legend after the lines are drawn
 fig.subplots_adjust(
-    left=0.07,  # space for ylabel
+    left=0.12,  # space for ylabel
     right=0.92,  # space for legend or vertical colorbar
-    bottom=0.15,  # space for supxlabel
-    top=0.88,  # space for suptitle
+    bottom=0.25,  # space for supxlabel
+    top=0.85,  # space for suptitle
     hspace=0.4,  # vertical spacing between rows
     wspace=0.3  # horizontal spacing between columns
 )
@@ -382,6 +382,8 @@ fig.subplots_adjust(
     right=0.92,  # space for legend or vertical colorbar
     bottom=0.25,  # space for supxlabel
     top=0.85,  # space for suptitle
+    hspace=0.4,  # vertical spacing between rows
+    wspace=0.3  # horizontal spacing between columns
 )
 half_circle = Circle((0,0), 1)
 
@@ -496,10 +498,10 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
 
     # Add legend after the lines are drawn
 fig.subplots_adjust(
-    left=0.07,  # space for ylabel
+    left=0.12,  # space for ylabel
     right=0.92,  # space for legend or vertical colorbar
-    bottom=0.15,  # space for supxlabel
-    top=0.88,  # space for suptitle
+    bottom=0.25,  # space for supxlabel
+    top=0.85,  # space for suptitle
     hspace=0.4,  # vertical spacing between rows
     wspace=0.3  # horizontal spacing between columns
 )

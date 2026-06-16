@@ -206,25 +206,25 @@ def process_and_plot(df, df_total, type_key):
     # Intensity
     plot_category(df, df_total,
                   bins={'column': 'Intensity', 'dict': intensity_bins},
-                  titles={0: 'Atlantic TD-TS', 1: 'Atlantic CAT 1-2', 2: 'Atlantic CAT 3-5',
-                          3: 'Eastern Pacific TD-TS', 4: 'Eastern Pacific CAT 1-2', 5: 'Eastern Pacific CAT 3-5'},
+                  titles={0: 'Atlantic TD–TS', 1: 'Atlantic CAT 1–2', 2: 'Atlantic CAT 3–5',
+                          3: 'Eastern Pacific TD–TS', 4: 'Eastern Pacific CAT 1–2', 5: 'Eastern Pacific CAT 3–5'},
                   rows=2, cols=3)
 
     # Shear
     plot_category(df, df_total,
                   bins={'column': 'Shear', 'dict': shear_bins},
-                  titles={0: r'Atlantic <5 $\frac{m}{s}$ Shear', 1: r'Atlantic 5-10 $\frac{m}{s}$ Shear',
-                          2: r'Atlantic >10 $\frac{m}{s}$ Shear', 3: r'Eastern Pacific <5 $\frac{m}{s}$ Shear',
-                          4: r'Eastern Pacific 5-10 $\frac{m}{s}$ Shear',
-                          5: r'Eastern Pacific >10 $\frac{m}{s}$ Shear'},
+                  titles={0: r'Atlantic <5 $m s^{-1}$ Shear', 1: r'Atlantic 5–10 $m s^{-1}$ Shear',
+                          2: r'Atlantic >10 $m s^{-1}$ Shear', 3: r'Eastern Pacific <5 $m s^{-1}$ Shear',
+                          4: r'Eastern Pacific 5–10 $m s^{-1}$ Shear',
+                          5: r'Eastern Pacific >10 $m s^{-1}$ Shear'},
                   rows=2, cols=3)
 
     # Time
     plot_category(df, df_total,
                   bins={'column': 'Time', 'dict': time_bins},
-                  titles={0: 'Atlantic 0-6 LST', 1: 'Atlantic 6-12 LST', 2: 'Atlantic 12-18 LST',
-                          3: 'Atlantic 18-24 LST', 4: 'Eastern Pacific 0-6 LST', 5: 'Eastern Pacific 6-12 LST',
-                          6: 'Eastern Pacific 12-18 LST', 7: 'Eastern Pacific 18-24 LST'},
+                  titles={0: 'Atlantic 0–6 LST', 1: 'Atlantic 6–12 LST', 2: 'Atlantic 12–18 LST',
+                          3: 'Atlantic 18–24 LST', 4: 'Eastern Pacific 0–6 LST', 5: 'Eastern Pacific 6–12 LST',
+                          6: 'Eastern Pacific 12–18 LST', 7: 'Eastern Pacific 18–24 LST'},
                   rows=2, cols=4)
 
 

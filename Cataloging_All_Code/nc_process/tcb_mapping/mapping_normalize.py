@@ -41,7 +41,7 @@ def get_needed_files(file_pattern: str, ships_df: pd.DataFrame, lon_bounds: tupl
         if (atcf_id in valid_ids and ts in ships_df.index and
                 lon_bounds[0] < ships_df.center_lon.values[0] < lon_bounds[1] and
                 lat_bounds[0] < ships_df.center_lat.values[0] < lat_bounds[1]):
-            needed_files.append({'file_mp': file})
+            needed_files.append(file.replace('shear_process/shear_process_all', 'tcb_mapping/files'))
     return needed_files
 
 
@@ -73,7 +73,7 @@ def run_parallel(file_list: list) -> tuple[pd.DataFrame, pd.DataFrame]:
     total_df = pd.DataFrame(0, index=LAT_RANGE, columns=LON_RANGE)
 
     with Pool(NUM_WORKERS) as pool:
-        for i, (px_df, tc_df) in enumerate(pool.imap_unordered(lambda args: process_file(**args), file_list)):
+        for i, (px_df, tc_df) in enumerate(pool.imap_unordered(process_file, file_list)):
             print(f"Processing file {i + 1} of {len(file_list)}")
             pixel_df = pixel_df.add(px_df)
             total_df = total_df.add(tc_df)
@@ -82,27 +82,72 @@ def run_parallel(file_list: list) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def plot_heatmaps(pixel_df: pd.DataFrame, total_df: pd.DataFrame, output_file: str):
-    """Plot original and normalized TCB pixel heatmaps."""
+    """Plot original, normalized, and sample count heatmaps."""
     extent = [-141, -19, 4, 31]
-    fig, axes = plt.subplots(2, 1, figsize=(10, 11), subplot_kw={'projection': ccrs.PlateCarree()})
-    fig.suptitle(
-        'Heatmap of the number of TCB Pixels from 2019-2023\n'
-        'from Atlantic and Eastern Pacific Tropical Cyclones',
-        fontsize=18, y=0.89
+
+    fig, axes = plt.subplots(
+        3, 1,
+        figsize=(10, 13),
+        subplot_kw={'projection': ccrs.PlateCarree()}
     )
-    fig.subplots_adjust(top=0.905, bottom=0.2, hspace=-0.2)
 
-    # Original counts
-    im1 = axes[0].imshow(pixel_df.to_numpy(), cmap='gist_heat', origin='lower', extent=extent,
-                         vmin=0, vmax=40_000, transform=ccrs.PlateCarree())
-    axes[0].set_title('Original', fontsize=16)
+    fig.suptitle(
+        'Heatmap of the number of TCB Pixels from 2019–2023\n'
+        'from Atlantic and Eastern Pacific Tropical Cyclones',
+        fontsize=18, y=0.93
+    )
 
-    # Normalized %
-    im2 = axes[1].imshow(np.nan_to_num(pixel_df.to_numpy() / total_df.to_numpy() * 100),
-                         cmap='gist_heat', origin='lower', extent=extent,
-                         vmin=0, vmax=40, transform=ccrs.PlateCarree())
-    axes[1].set_title('Normalized', fontsize=16)
+    fig.subplots_adjust(top=0.90, bottom=0.08, hspace=0.05)
 
+    # -------------------------
+    # Panel A: Raw TCB counts
+    # -------------------------
+    im1 = axes[0].imshow(
+        pixel_df.to_numpy(),
+        cmap='gist_heat',
+        origin='lower',
+        extent=extent,
+        vmin=0,
+        vmax=35_000,
+        transform=ccrs.PlateCarree()
+    )
+    axes[0].set_title('Raw TCB Pixel Counts', fontsize=16)
+
+    # -------------------------
+    # Panel B: Normalized %
+    # -------------------------
+    normalized = np.nan_to_num(
+        pixel_df.to_numpy() / total_df.to_numpy() * 100
+    )
+
+    im2 = axes[1].imshow(
+        normalized,
+        cmap='gist_heat',
+        origin='lower',
+        extent=extent,
+        vmin=0,
+        vmax=40,
+        transform=ccrs.PlateCarree()
+    )
+    axes[1].set_title('Normalized (% of Pixels that are TCBs)', fontsize=16)
+
+    # -------------------------
+    # Panel C: Sample Count (Denominator)
+    # -------------------------
+    im3 = axes[2].imshow(
+        total_df.to_numpy(),
+        cmap='gist_heat',
+        origin='lower',
+        extent=extent,
+        vmin=0,
+        vmax=160_000,
+        transform=ccrs.PlateCarree()
+    )
+    axes[2].set_title('Total Pixel Samples per Bin', fontsize=16)
+
+    # -------------------------
+    # Common Map Features
+    # -------------------------
     for ax in axes:
         ax.set_extent(extent, crs=ccrs.PlateCarree())
         ax.set_facecolor(cfeature.COLORS['water'])
@@ -113,7 +158,8 @@ def plot_heatmaps(pixel_df: pd.DataFrame, total_df: pd.DataFrame, output_file: s
         ax.add_feature(cfeature.STATES, edgecolor='white')
         ax.add_feature(cfeature.RIVERS)
 
-        gl = ax.gridlines(draw_labels=True, linewidth=1, color='white', alpha=0.5, linestyle='--')
+        gl = ax.gridlines(draw_labels=True, linewidth=1, color='white',
+                          alpha=0.5, linestyle='--')
         gl.xlocator = mticker.FixedLocator([-140, -120, -100, -80, -60, -40, -20])
         gl.ylocator = mticker.FixedLocator([0, 10, 20, 30])
         gl.xformatter = LongitudeFormatter()
@@ -121,16 +167,17 @@ def plot_heatmaps(pixel_df: pd.DataFrame, total_df: pd.DataFrame, output_file: s
         gl.xlabel_style = {'size': 12}
         gl.ylabel_style = {'size': 12}
 
+    # -------------------------
     # Colorbars
-    cax1 = fig.add_axes((0.15, 0.575, 0.70, 0.02))
-    cbar1 = fig.colorbar(im1, cax=cax1, orientation="horizontal")
-    cbar1.ax.tick_params(labelsize=12)
+    # -------------------------
+    cbar1 = fig.colorbar(im1, ax=axes[0], orientation="horizontal", pad=0.15)
     cbar1.set_label('Number of TCB Pixels', fontsize=14)
 
-    cax2 = fig.add_axes((0.15, 0.25, 0.70, 0.02))
-    cbar2 = fig.colorbar(im2, cax=cax2, orientation="horizontal")
-    cbar2.ax.tick_params(labelsize=12)
+    cbar2 = fig.colorbar(im2, ax=axes[1], orientation="horizontal", pad=0.15)
     cbar2.set_label('% of Pixels that are TCBs', fontsize=14)
+
+    cbar3 = fig.colorbar(im3, ax=axes[2], orientation="horizontal", pad=0.15)
+    cbar3.set_label('Total Number of Pixel Samples', fontsize=14)
 
     plt.savefig(output_file, dpi=300, bbox_inches="tight")
     plt.close()
@@ -144,13 +191,15 @@ if __name__ == "__main__":
     # --- Atlantic ---
     ships_al = load_ships_data(Path('/rstor/jmayhall/cataloging/nc_process/shear_process/'
                                     'shear_process_all/ships_interp_AL.txt'))
-    files_al = get_needed_files('/rstor/jmayhall/cataloging/nc_process/tcb_mapping/files/AL*.npz',
+    files_al = get_needed_files('/rstor/jmayhall/cataloging/nc_process/shear_process/'
+                                    'shear_process_all/AL*.npz',
                                 ships_al, lon_bounds=(-105, -20), lat_bounds=(5, 30))
 
     # --- Eastern Pacific ---
     ships_ep = load_ships_data(Path('/rstor/jmayhall/cataloging/nc_process/shear_process/'
                                     'shear_process_all/ships_interp_EP.txt'))
-    files_ep = get_needed_files('/rstor/jmayhall/cataloging/nc_process/tcb_mapping/files/EP*.npz',
+    files_ep = get_needed_files('/rstor/jmayhall/cataloging/nc_process/shear_process/'
+                                    'shear_process_all/EP*.npz',
                                 ships_ep, lon_bounds=(-140, -90), lat_bounds=(5, 30))
 
     all_files = files_al + files_ep
