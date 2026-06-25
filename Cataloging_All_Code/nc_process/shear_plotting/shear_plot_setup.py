@@ -2,7 +2,7 @@
 """
 Optimized: 10/02/2025
 @author: John Mark Mayhall
-Memory-efficient and optimized code for plotting TCB data by shear-relative azimuth and radius.
+Memory-efficient and optimized code for plotting CB data by shear-relative azimuth and radius.
 """
 import matplotlib as mpl
 import matplotlib.patheffects as pe
@@ -16,7 +16,7 @@ from matplotlib.cm import ScalarMappable
 
 class Plotting:
     """
-    Class for plotting heatmaps of TCB (Tropical Cyclone Banding) shear data
+    Class for plotting heatmaps of CB (Tropical Cyclone Banding) shear data
     relative to azimuth or storm motion.
     """
 
@@ -38,7 +38,7 @@ class Plotting:
 
     def main_plot(self) -> None:
         """
-        Generates TCB heatmaps for all subplots in a memory-efficient manner.
+        Generates CB heatmaps for all subplots in a memory-efficient manner.
         """
         print(f'Plotting {self.plot_type.capitalize()} Data for 1024 km domain')
 
@@ -139,7 +139,7 @@ class Plotting:
         cbar_ax = fig.add_axes([0.15, 0.1, 0.7, 0.03])
         cbar = fig.colorbar(sm, cax=cbar_ax, orientation='horizontal', ticks=level_ticks,
                             format=mticker.FixedFormatter(tick_labels))
-        cbar.set_label('TCB Occurrence (%)', fontsize=20)
+        cbar.set_label('CB Occurrence (%)', fontsize=20)
         cbar.ax.tick_params(labelsize=18)
 
         # Determine plot title and save filename
@@ -152,6 +152,6 @@ class Plotting:
         save_title = f'{self.plot_type}_{sep_type}'
 
         # Final figure title and save
-        fig.suptitle(f'TCB {plot_title} Relative Plots', fontsize=20)
+        fig.suptitle(f'CB {plot_title} Relative Plots', fontsize=20)
         plt.savefig(f'{save_title}_heatmap_1024.jpeg', dpi=600)
         plt.close(fig)

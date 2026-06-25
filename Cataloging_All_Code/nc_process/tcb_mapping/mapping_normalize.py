@@ -2,7 +2,7 @@
 """
 Last Edited: 10/02/2025
 @author: John Mark Mayhall
-Purpose: Determine if transverse bands exist in each quadrant of a tropical cyclone.
+Purpose: Determine if cirrus bands exist in each quadrant of a tropical cyclone.
 """
 import glob
 from multiprocessing import Pool
@@ -46,7 +46,7 @@ def get_needed_files(file_pattern: str, ships_df: pd.DataFrame, lon_bounds: tupl
 
 
 def process_file(file_mp: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Process a single .npz file and return TCB pixel counts and total pixel counts."""
+    """Process a single .npz file and return CB pixel counts and total pixel counts."""
     data = np.load(file_mp)
     lon_arr = np.round(data['lon'].flatten(), 1)
     lat_arr = np.round(data['lat'].flatten(), 1)
@@ -92,7 +92,7 @@ def plot_heatmaps(pixel_df: pd.DataFrame, total_df: pd.DataFrame, output_file: s
     )
 
     fig.suptitle(
-        'Heatmap of the number of TCB Pixels from 2019–2023\n'
+        'Heatmap of the number of CB Pixels from 2019–2023\n'
         'from Atlantic and Eastern Pacific Tropical Cyclones',
         fontsize=18, y=0.93
     )
@@ -100,7 +100,7 @@ def plot_heatmaps(pixel_df: pd.DataFrame, total_df: pd.DataFrame, output_file: s
     fig.subplots_adjust(top=0.90, bottom=0.08, hspace=0.05)
 
     # -------------------------
-    # Panel A: Raw TCB counts
+    # Panel A: Raw CB counts
     # -------------------------
     im1 = axes[0].imshow(
         pixel_df.to_numpy(),
@@ -111,7 +111,7 @@ def plot_heatmaps(pixel_df: pd.DataFrame, total_df: pd.DataFrame, output_file: s
         vmax=35_000,
         transform=ccrs.PlateCarree()
     )
-    axes[0].set_title('Raw TCB Pixel Counts', fontsize=16)
+    axes[0].set_title('Raw CB Pixel Counts', fontsize=16)
 
     # -------------------------
     # Panel B: Normalized %
@@ -129,7 +129,7 @@ def plot_heatmaps(pixel_df: pd.DataFrame, total_df: pd.DataFrame, output_file: s
         vmax=40,
         transform=ccrs.PlateCarree()
     )
-    axes[1].set_title('Normalized (% of Pixels that are TCBs)', fontsize=16)
+    axes[1].set_title('Normalized (% of Pixels that are CBs)', fontsize=16)
 
     # -------------------------
     # Panel C: Sample Count (Denominator)
@@ -171,10 +171,10 @@ def plot_heatmaps(pixel_df: pd.DataFrame, total_df: pd.DataFrame, output_file: s
     # Colorbars
     # -------------------------
     cbar1 = fig.colorbar(im1, ax=axes[0], orientation="horizontal", pad=0.15)
-    cbar1.set_label('Number of TCB Pixels', fontsize=14)
+    cbar1.set_label('Number of CB Pixels', fontsize=14)
 
     cbar2 = fig.colorbar(im2, ax=axes[1], orientation="horizontal", pad=0.15)
-    cbar2.set_label('% of Pixels that are TCBs', fontsize=14)
+    cbar2.set_label('% of Pixels that are CBs', fontsize=14)
 
     cbar3 = fig.colorbar(im3, ax=axes[2], orientation="horizontal", pad=0.15)
     cbar3.set_label('Total Number of Pixel Samples', fontsize=14)
@@ -205,4 +205,4 @@ if __name__ == "__main__":
     all_files = files_al + files_ep
 
     pixel_df, tc_df = run_parallel(all_files)
-    plot_heatmaps(pixel_df, tc_df, "tcb_heatmap.png")
+    plot_heatmaps(pixel_df, tc_df, "CB_heatmap.png")

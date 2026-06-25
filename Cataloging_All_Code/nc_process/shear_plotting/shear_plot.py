@@ -3,7 +3,7 @@
 Optimized: 10/02/2025
 @author: John Mark Mayhall
 
-Memory-efficient code for plotting TCB data by shear, relative azimuth, and radius.
+Memory-efficient code for plotting CB data by shear, relative azimuth, and radius.
 Uses multiprocessing for faster binning and grouping.
 """
 

@@ -2,7 +2,7 @@
 """
 Last Edited: 07/10/2025
 @author: John Mark Mayhall
-Purpose: Identify transverse bands in TC quadrants based on shear vector.
+Purpose: Identify  bands in TC quadrants based on shear vector.
 """
 import glob
 from multiprocessing import Pool
@@ -213,10 +213,10 @@ x_labels = ([group_func(results_AL['wind_change'][f'{h:+}']['pixel'],
 labels_list = [f"{h}hr" for h in past_hours] + [f"{h}hr" for h in past_hours]
 
 fig, axes = plt.subplots(4, 2, figsize=(18, 14))
-fig.suptitle('TCB Occurrences vs Previous TC Intensity Change',
+fig.suptitle('CB Occurrences vs Previous TC Intensity Change',
              fontsize=24)
 fig.supxlabel(r'TC Wind Speed Change ($\frac{{dv}}{{dt}}$)', fontsize=24)
-fig.supylabel('Percentage of Pixels with TCBs', fontsize=24)
+fig.supylabel('Percentage of Pixels with CBs', fontsize=24)
 rows, cols = axes.shape
 
 # Flatten axes in column-major order (top half first column, bottom half second column)
@@ -442,10 +442,10 @@ x_labels = ([group_func(results_AL['wind_change'][f'{h:+}']['pixel'],
 labels_list = [f"{h}hr" for h in future_hours] + [f"{h}hr" for h in future_hours]
 
 fig, axes = plt.subplots(4, 2, figsize=(18, 14))
-fig.suptitle('TCB Occurrences vs Future TC Intensity Change',
+fig.suptitle('CB Occurrences vs Future TC Intensity Change',
              fontsize=24)
 fig.supxlabel(r'TC Wind Speed Change ($\frac{{dv}}{{dt}}$)', fontsize=24)
-fig.supylabel('Percentage of Pixels with TCBs', fontsize=24)
+fig.supylabel('Percentage of Pixels with CBs', fontsize=24)
 rows, cols = axes.shape
 
 # Flatten axes in column-major order (top half first column, bottom half second column)

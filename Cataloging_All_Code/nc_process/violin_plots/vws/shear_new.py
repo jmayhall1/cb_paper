@@ -1,8 +1,8 @@
 # coding=utf-8
 """
-Last Edited: 10/02/2025
+Last Edited: 06/12/2026
 @author: John Mark Mayhall
-Purpose: Identify transverse bands in TC quadrants based on shear vector.
+Purpose: Identify cirrus bands in TC quadrants based on shear vector.
 """
 import glob
 from collections import defaultdict
@@ -28,39 +28,26 @@ def shear_color(vws):
     else:
         return 'red'        # High shear
 
-def group_func(data: list, group_labels: list) -> list:
+def group_func(data: list, group_labels: list):
     """
-    Function for grouping data and labels in nested lists.
-    :param data: Data to be grouped
-    :param group_labels: Grouping labels
-    :return: Two nested lists of grouped data and labels
+    Group pixel data by rounded intensity change bins.
+
+    Converts raw pixel counts to percentage of domain (1024x1024).
+    Returns:
+        grouped_data : list of lists (pixel % per bin)
+        grouped_labels : list of lists (bin labels)
     """
-    sorted_pairs = sorted(zip(group_labels, data))
-    group_labels, data = zip(*sorted_pairs)
-    group_labels = list(group_labels)
-    data = list(data)
+    df = pd.DataFrame({
+        "label": group_labels,
+        "data": data
+    }).dropna()
 
-    grouped_l1 = defaultdict(list)
-    grouped_l2 = defaultdict(list)
+    # Convert to % once (vectorized)
+    df["data"] = (df["data"] / (1024 * 1024)) * 100
 
-    for val1, val2 in zip(group_labels, data):
-        grouped_l1[val1].append(val1)
-        grouped_l2[val1].append(val2)
+    grouped = df.groupby("label")["data"].apply(list).sort_index()
 
-    # Sortby unique keys from list1 to keep order consistent
-    keys = sorted(grouped_l1.keys())
-    group_labels = [grouped_l1[k] for k in keys]
-    data = [grouped_l2[k] for k in keys]
-
-    # Create nested list from grouped values
-    final_data = []
-    for d in data:
-        final_data.append([(num / (1024 * 1024)) * 100 for num in d])
-        flat = [item for sublist in final_data for item in sublist]
-        if np.max(flat) > 60:
-            print(f'High final data: {final_data}')
-
-    return final_data, group_labels
+    return grouped.tolist(), [[k] * len(v) for k, v in grouped.items()]
 
 
 def adjacent_values(sorted_array, q1, q3):
@@ -407,9 +394,9 @@ if __name__ == '__main__':
     data_al, labels_al = group_func(results_al['shear_pixel'], results_al['shear_count'])
     data_ep, labels_ep = group_func(results_ep['shear_pixel'], results_ep['shear_count'])
     fig1, _ = plot_violin_2panel_shear(data_al, labels_al, data_ep, labels_ep,
-                       suptitle='TCB Occurrences vs Vertical Wind Shear',
+                       suptitle='CB Occurrences vs Vertical Wind Shear',
                        xlabel=r'Vertical Wind Shear ($m s^{-1}$)',
-                       ylabel='Percentage of Storm Pixels with TCBs',
+                       ylabel='Percentage of Storm Pixels with CBs',
                        filename='shear_violin_ALEP.png')
     fig2, _ = plot_contourf_2panel_shear(data_al, labels_al, data_ep, labels_ep,
                          suptitle='TC Vertical Wind Shear Mann-Whitney P-Values',

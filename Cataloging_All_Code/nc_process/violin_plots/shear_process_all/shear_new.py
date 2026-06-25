@@ -2,7 +2,7 @@
 """
 Last Edited: 10/02/2025
 @author: John Mark Mayhall
-Purpose: Identify transverse bands in TC quadrants based on shear vector.
+Purpose: Identify cirrus bands in TC quadrants based on shear vector.
 """
 import glob
 from collections import defaultdict
@@ -663,9 +663,9 @@ if __name__ == '__main__':
     data_al, labels_al = group_func(results_al['diurnal_pixel'], results_al['diurnal_count'])
     data_ep, labels_ep = group_func(results_ep['diurnal_pixel'], results_ep['diurnal_count'])
     fig1, _ = plot_violin_2panel_diurnal(data_al, labels_al, data_ep, labels_ep,
-                       suptitle='TCB Occurrences vs Diurnal Cycle Stage',
+                       suptitle='CB Occurrences vs Diurnal Cycle Stage',
                        xlabel='Local Solar Time',
-                       ylabel='Percentage of Storm Pixels with TCBs',
+                       ylabel='Percentage of Storm Pixels with CBs',
                        filename='diurnal_violin_ALEP.png')
     fig2, _ = plot_contourf_2panel_diurnal(data_al, labels_al, data_ep, labels_ep,
                          suptitle='Diurnal Cycle Mann-Whitney P-Values',
@@ -689,9 +689,9 @@ if __name__ == '__main__':
     data_al, labels_al = group_func(results_al['intensity_pixel'], results_al['intensity_count'])
     data_ep, labels_ep = group_func(results_ep['intensity_pixel'], results_ep['intensity_count'])
     fig1, _ = plot_violin_2panel_intensity(data_al, labels_al, data_ep, labels_ep,
-                       suptitle='TCB Occurrences vs TC Intensity',
+                       suptitle='CB Occurrences vs TC Intensity',
                        xlabel='TC Current Wind Speed (kts)',
-                       ylabel='Percentage of Storm Pixels with TCBs',
+                       ylabel='Percentage of Storm Pixels with CBs',
                        filename='intensity_violin_ALEP.png')
     fig2, _ = plot_contourf_2panel_intensity(data_al, labels_al, data_ep, labels_ep,
                          suptitle='TC Intensity Mann-Whitney P-Values',

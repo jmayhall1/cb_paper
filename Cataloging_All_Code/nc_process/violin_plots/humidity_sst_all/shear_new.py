@@ -2,7 +2,7 @@
 """
 Last Edited: 10/02/2025
 Author: John Mark Mayhall
-Purpose: Identify transverse bands in TC quadrants based on shear vector,
+Purpose: Identify cirrus bands in TC quadrants based on shear vector,
          generate violin plots and Mann-Whitney contour plots for RH and SST.
 """
 import glob
@@ -474,9 +474,9 @@ if __name__ == '__main__':
     data_AL, labels_AL = group_func(results_AL['sst_pixel'], results_AL['sst_count'])
     data_EP, labels_EP = group_func(results_EP['sst_pixel'], results_EP['sst_count'])
     fig1, _ = plot_violin_2panel(data_AL, labels_AL, data_EP, labels_EP,
-                       suptitle='TCB Occurrences vs SST',
+                       suptitle='CB Occurrences vs SST',
                        xlabel=r'SST ($^\circ$C)',
-                       ylabel='Percentage of Storm Pixels with TCBs',
+                       ylabel='Percentage of Storm Pixels with CBs',
                        filename='sst_violin_ALEP.png')
     fig2, _ = plot_contourf_2panel(data_AL, labels_AL, data_EP, labels_EP,
                          suptitle='SST Mann-Whitney P-Values',
@@ -524,9 +524,9 @@ if __name__ == '__main__':
             rh_lims[col]
         )
 
-    fig.suptitle('TCB Occurrences vs RH', fontsize=28)
+    fig.suptitle('CB Occurrences vs RH', fontsize=28)
     fig.supxlabel('RH (%)', fontsize=28)
-    fig.supylabel('Percentage of Storm Pixels with TCBs', fontsize=28)
+    fig.supylabel('Percentage of Storm Pixels with CBs', fontsize=28)
 
     plt.savefig('rh_ALEP.png', dpi=300, bbox_inches="tight")
     plt.close()
