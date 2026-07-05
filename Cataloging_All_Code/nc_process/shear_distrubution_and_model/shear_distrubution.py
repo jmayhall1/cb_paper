@@ -95,8 +95,8 @@ if __name__ == '__main__':
 
     # Titles and labels
     fig.subplots_adjust(bottom=0.20)  # push plots up
-    fig.suptitle('Tropical Cyclone Shear Distribution', fontsize=20, y=0.95)
-    fig.supxlabel(r'Shear ($\frac{m}{s}$)', fontsize=20, y=0.1)
+    fig.suptitle('TC Shear Distribution', fontsize=20, y=0.95)
+    fig.supxlabel(r'Shear ($m s^{-1}$)', fontsize=20, y=0.1)
     fig.supylabel('# of Images', fontsize=20, x=0.05)
 
     # Save figure

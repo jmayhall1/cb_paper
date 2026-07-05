@@ -11,6 +11,7 @@ from datetime import datetime
 from multiprocessing import Lock
 
 import ephem
+
 import numpy as np
 import pandas as pd
 from keras.models import load_model
