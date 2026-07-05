@@ -124,7 +124,7 @@ for axis, data, title in zip(
     axis.axvline(x=95, color='magenta', linestyle='--', lw=3)
 
     axis.set_xlim(20, 170)
-    axis.set_xlabel("Maximum Wind (kt)")
+    axis.set_xlabel("Intensity (kt)")
     axis.set_title(title, fontsize=15)
 
     axis.grid(

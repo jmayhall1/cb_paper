@@ -1,23 +1,23 @@
 # coding=utf-8
 """
 Optimized: 10/02/2025
-@author: John Mark Mayhall
+Updated: adds proper file-SHIPS matching + median lines
 
-This script processes tropical cyclone shear data:
-1. Loads shear process .npz files and the SHIPS interpolated dataset.
-2. Matches each file to its corresponding SHIPS record.
-3. Computes wind shear magnitude (sqrt(u^2 + v^2)).
-4. Separates results by basin (Atlantic vs. Eastern Pacific).
-5. Creates and saves a histogram of shear distribution.
+Processes tropical cyclone shear data:
+1. Loads shear NPZ files and SHIPS dataset
+2. Matches only valid file-SHIPS pairs (robust merge approach)
+3. Computes shear magnitude
+4. Splits by basin
+5. Plots distributions with medians
 """
 
 import glob
-
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
+
     # -----------------------------
     # Configuration
     # -----------------------------
@@ -25,80 +25,98 @@ if __name__ == '__main__':
     BASE_DIR = '/rstor/jmayhall/' if ONLINE else '//uahdata/rstor/'
     DATA_DIR = f'{BASE_DIR}cataloging/nc_process/shear_process/shear_process_all/'
 
-    # Input file paths
-    file_list = glob.glob(f'{DATA_DIR}*.npz')  # shear files
-    ships_path = f'{DATA_DIR}ships_interp.txt'  # SHIPS interpolated data
+    file_list = glob.glob(f'{DATA_DIR}*.npz')
+    ships_path = f'{DATA_DIR}ships_interp.txt'
 
     # -----------------------------
-    # Load SHIPS dataset
+    # Load SHIPS data
     # -----------------------------
-    ships_df = pd.read_csv(
-        ships_path, sep='\t', index_col=0
-    )  # index is timestamps (string formatted)
+    ships_df = pd.read_csv(ships_path, sep='\t', index_col=0)
 
-    # -----------------------------
-    # Process shear files
-    # -----------------------------
-    file_len = len(file_list)
-    shear_list_AL, shear_list_EP = [], []
-
-    for i, file in enumerate(file_list, start=1):
-        print(f'Processing File {i} of {file_len}')
-
-        # Extract timestamp and storm ID from file path
-        # Adjust slicing carefully to match your file naming convention
-        timestamp = str(pd.Timestamp(f'{file[79:87]}{file[88:92]}'))  # YYYYMMDD + HHMM
-        s_id = file[70:78]  # storm ID (e.g., AL012022)
-
-        # Match to SHIPS dataset
-        time_ships = ships_df.loc[ships_df.index == timestamp]
-        current_ships = time_ships[time_ships.atcf_id.str.contains(s_id)]
-
-        if current_ships.empty:
-            print(f'Warning: No SHIPS data found for {s_id} at {timestamp}')
-            continue
-
-        # Compute shear magnitude [m/s] (ships shear is in knots → convert to m/s)
-        shear = np.sqrt(current_ships.shear_u ** 2 + current_ships.shear_v ** 2).values[0] * 0.514444
-
-        # Separate by basin
-        if 'AL' in s_id:
-            shear_list_AL.append(shear)
-        else:
-            shear_list_EP.append(shear)
+    # convert SHIPS index to datetime explicitly
+    ships_df.index = pd.to_datetime(ships_df.index)
 
     # -----------------------------
-    # Clean NaNs and convert to arrays
+    # Build valid file list (QC step)
     # -----------------------------
-    shear_list_AL = np.array(shear_list_AL)
-    shear_list_EP = np.array(shear_list_EP)
-    shear_list_AL = shear_list_AL[~np.isnan(shear_list_AL)]
-    shear_list_EP = shear_list_EP[~np.isnan(shear_list_EP)]
+    valid_cases = []
+
+    for file in file_list:
+        atcf_id = file[-41:-33]
+        date = file[-32:-24]
+        time = file[-23:-19]
+
+        valid_cases.append(
+            (
+                atcf_id,
+                pd.to_datetime(f'{date}{time}', format='%Y%m%d%H%M')
+            )
+        )
+
+    valid_cases = pd.DataFrame(valid_cases, columns=['atcf_id', 'time'])
+    valid_cases['time'] = pd.to_datetime(valid_cases['time'])
 
     # -----------------------------
-    # Plot shear distributions
+    # Match SHIPS + NPZ (IMPORTANT FIX)
+    # -----------------------------
+    ships = (
+        ships_df.reset_index()
+        .rename(columns={'index': 'time'})
+        .merge(valid_cases, on=['time', 'atcf_id'], how='inner')
+    )
+
+    # -----------------------------
+    # Compute shear magnitude
+    # -----------------------------
+    ships['shear'] = np.sqrt(
+        ships['shear_u'] ** 2 + ships['shear_v'] ** 2
+    ) * 0.514444
+
+    # Optional QC filter (keep if desired)
+    ships = ships.dropna(subset=['shear'])
+
+    # -----------------------------
+    # Split by basin
+    # -----------------------------
+    atl = ships[ships['atcf_id'].str.startswith('AL')]
+    ep = ships[ships['atcf_id'].str.startswith('EP')]
+
+    # -----------------------------
+    # Plot
     # -----------------------------
     fig, ax = plt.subplots(figsize=(16, 8))
 
-    # Histogram for Atlantic
-    ax.hist(shear_list_AL, bins=np.arange(0, 36, 2.5),
+    bins = np.arange(0, 36, 2.5)
+
+    # Histograms
+    ax.hist(atl['shear'], bins=bins,
             color='blue', alpha=0.5, label='Atlantic')
 
-    # Histogram for Eastern Pacific
-    ax.hist(shear_list_EP, bins=np.arange(0, 36, 2.5),
+    ax.hist(ep['shear'], bins=bins,
             color='green', alpha=0.5, label='Eastern Pacific')
 
-    # Axis settings
+    # -----------------------------
+    # MEDIANS (NEW)
+    # -----------------------------
+    al_median = np.nanmedian(atl['shear'])
+    ep_median = np.nanmedian(ep['shear'])
+
+    ax.axvline(al_median, color='black', linewidth=3, label='AL Median Shear')
+    ax.axvline(ep_median, linestyle='--', color='black', linewidth=3, label='EP Median Shear')
+
+    # -----------------------------
+    # Formatting
+    # -----------------------------
     ax.set_xlim(0, 35)
     ax.set_ylim(0, 3000)
-    ax.legend(prop={'size': 16})
 
-    # Titles and labels
-    fig.subplots_adjust(bottom=0.20)  # push plots up
-    fig.suptitle('TC Shear Distribution', fontsize=20, y=0.95)
-    fig.supxlabel(r'Shear ($m s^{-1}$)', fontsize=20, y=0.1)
-    fig.supylabel('# of Images', fontsize=20, x=0.05)
+    ax.set_title('TC Shear Distribution', fontsize=18)
+    ax.set_xlabel(r'Shear ($m s^{-1}$)', fontsize=14)
+    ax.set_ylabel('# of Images', fontsize=14)
 
-    # Save figure
-    plt.savefig('shear_distribution_all.png')
-    print("Figure saved as shear_distribution_all.png")
+    ax.legend(prop={'size': 12})
+
+    plt.tight_layout()
+    plt.savefig('shear_distribution_all.png', dpi=300)
+
+    print("Saved: shear_distribution_all.png")
