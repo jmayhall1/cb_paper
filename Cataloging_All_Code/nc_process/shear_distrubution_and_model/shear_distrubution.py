@@ -12,9 +12,13 @@ Processes tropical cyclone shear data:
 """
 
 import glob
+
+import matplotlib.patheffects as pe
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+from scipy.stats import gaussian_kde
 
 if __name__ == '__main__':
 
@@ -84,39 +88,105 @@ if __name__ == '__main__':
     # -----------------------------
     # Plot
     # -----------------------------
-    fig, ax = plt.subplots(figsize=(16, 8))
+    fig, ax = plt.subplots(figsize=(10, 6))
 
-    bins = np.arange(0, 36, 2.5)
+    bin_width = 2.5
+    bins = np.arange(0, 36, bin_width)
 
-    # Histograms
-    ax.hist(atl['shear'], bins=bins,
-            color='blue', alpha=0.5, label='Atlantic')
+    basins = [
+        (atl, "Atlantic", "tab:blue", "-", 1),
+        (ep, "Eastern Pacific", "tab:green", "-", 0.45),
+    ]
 
-    ax.hist(ep['shear'], bins=bins,
-            color='green', alpha=0.5, label='Eastern Pacific')
+    for data, label, color, ls, al in basins:
+        # Histogram
+        ax.hist(
+            data["shear"],
+            bins=bins,
+            density=True,
+            color=color,
+            alpha=al,
+            edgecolor="black",
+            linewidth=0.7,
+            label=f"{label} Histogram",
+        )
+        # Median
+        median = np.nanmedian(data["shear"])
+        ax.axvline(
+            median,
+            color=color,
+            linestyle=ls,
+            linewidth=2.5,
+            zorder=8,
+        )
 
-    # -----------------------------
-    # MEDIANS (NEW)
-    # -----------------------------
-    al_median = np.nanmedian(atl['shear'])
-    ep_median = np.nanmedian(ep['shear'])
+        # KDE scaled to histogram counts
+        x = np.linspace(0, 35, 500)
+        kde = gaussian_kde(data["shear"].dropna())
 
-    ax.axvline(al_median, color='black', linewidth=3, label='AL Median Shear')
-    ax.axvline(ep_median, linestyle='--', color='black', linewidth=3, label='EP Median Shear')
+        ax.plot(
+            x,
+            kde(x),
+            color=color,
+            linestyle=ls,
+            linewidth=3,
+            zorder=10,
+            label=f"{label} KDE",
+            path_effects=[
+                pe.Stroke(linewidth=5, foreground='black'),
+                pe.Normal(),
+            ],
+        )
 
     # -----------------------------
     # Formatting
     # -----------------------------
     ax.set_xlim(0, 35)
-    ax.set_ylim(0, 3000)
 
-    ax.set_title('TC Shear Distribution', fontsize=18)
-    ax.set_xlabel(r'Shear ($m s^{-1}$)', fontsize=14)
-    ax.set_ylabel('# of Images', fontsize=14)
+    ax.set_title("TC Shear Distribution", fontsize=18)
+    ax.set_xlabel(r"Shear ($m\,s^{-1}$)", fontsize=14)
+    ax.set_ylabel("Probability Density", fontsize=14)
 
-    ax.legend(prop={'size': 12})
+    ax.grid(True, linestyle="--", linewidth=1)
+    ax.set_axisbelow(True)
+
+    legend_lines = [
+        Line2D(
+            [0], [0],
+            color="tab:blue",
+            linewidth=3,
+            linestyle="-",
+            label="Atlantic KDE / Median"
+        ),
+        Line2D(
+            [0], [0],
+            color="tab:green",
+            linewidth=3,
+            linestyle="--",
+            label="Eastern Pacific KDE / Median"
+        ),
+        Line2D(
+            [0], [0],
+            color="tab:blue",
+            linewidth=8,
+            alpha=0.45,
+            label="Atlantic Histogram"
+        ),
+        Line2D(
+            [0], [0],
+            color="tab:green",
+            linewidth=8,
+            alpha=0.45,
+            label="Eastern Pacific Histogram"
+        ),
+    ]
+
+    ax.legend(
+        handles=legend_lines,
+        frameon=False,
+        fontsize=12,
+        loc="upper right",
+    )
 
     plt.tight_layout()
-    plt.savefig('shear_distribution_all.png', dpi=300)
-
-    print("Saved: shear_distribution_all.png")
+    plt.savefig("shear_distribution_all.png", dpi=300)

@@ -275,9 +275,9 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
     ax.axvline(x=-20, color='blue', linestyle='--', lw=2, label='RW Transition')
     ax.axvline(x=30, color='magenta', linestyle='--', lw=2, label='RI Transition')
     if z == 0:
-        ax.set_title(f'Intensity Change over\n the Previous {label[1:-2]} Hours ' + rf'(Atlantic, kt {label[1:]}$^{{-1}}$)', fontsize=20)
+        ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours\n' + rf'Atlantic, 20kt ($24h^{{-1}}$)', fontsize=20)
     else:
-        ax.set_title(f'Intensity Change over\n the Previous {label[1:-2]} Hours ' + rf'(Eastern Pacific, kt {label[1:]}$^{{-1}}$)', fontsize=20)
+        ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours\n' + rf'Eastern Pacific, 20kt ($24h^{{-1}}$)', fontsize=20)
 
     # Add legend after the lines are drawn
 fig.subplots_adjust(
@@ -372,9 +372,9 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
     ax.set_title(f'{label}', fontsize=20)
     ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
     if z == 0:
-        ax.set_title(f'Intensity Change over\n the Previous {label[1:-2]} Hours ' + rf'(Atlantic, kt {label[1:]}$^{{-1}}$)', fontsize=20)
+        ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours\n' + rf'Atlantic, 20kt ($24h^{{-1}}$)', fontsize=20)
     else:
-        ax.set_title(f'Intensity Change over\n the Previous {label[1:-2]} Hours ' + rf'(Eastern Pacific, kt {label[1:]}$^{{-1}}$)', fontsize=20)
+        ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours\n' + rf'Eastern Pacific, 20kt ($24h^{{-1}}$)', fontsize=20)
 
 # Add colorbar
 fig.subplots_adjust(
@@ -492,9 +492,9 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
     ax.axvline(x=-20, color='blue', linestyle='--', lw=2, label='RW Transition')
     ax.axvline(x=30, color='magenta', linestyle='--', lw=2, label='RI Transition')
     if z == 0:
-        ax.set_title(f'Intensity Change over\n the Next {label[:-2]} Hours ' + rf'(Atlantic, kt {label}$^{{-1}}$)', fontsize=20)
+        ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours\n' + rf'Atlantic, 20kt ($24h^{{-1}}$)', fontsize=20)
     else:
-        ax.set_title(f'Intensity Change over\n the Next {label[:-2]} Hours ' + rf'(Eastern Pacific, kt {label}$^{{-1}}$)', fontsize=20)
+        ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours\n' + rf'Eastern Pacific, 20kt ($24h^{{-1}}$)', fontsize=20)
 
     # Add legend after the lines are drawn
 fig.subplots_adjust(
@@ -589,9 +589,9 @@ for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, lab
     ax.set_title(f'{label}', fontsize=20)
     ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
     if z == 0:
-        ax.set_title(f'Intensity Change over\n the Next {label[:-2]} Hours ' + rf'(Atlantic, kt {label}$^{{-1}}$)', fontsize=20)
+        ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours\n' + rf'Atlantic, 20kt ($24h^{{-1}}$)', fontsize=20)
     else:
-        ax.set_title(f'Intensity Change over\n the Next {label[:-2]} Hours ' + rf'(Eastern Pacific, kt {label}$^{{-1}}$)', fontsize=20)
+        ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours\n' + rf'Eastern Pacific, 20kt ($24h^{{-1}}$)', fontsize=20)
 
 # Add colorbar
 # Adjust spacing to make room for colorbar at the bottom
