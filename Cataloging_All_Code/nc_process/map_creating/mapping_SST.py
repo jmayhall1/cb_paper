@@ -6,7 +6,7 @@ Optimized: 10/01/2025
 Purpose:
 --------
 Map tropical cyclones (TCs) on average sea surface temperature (SST) fields.
-TD, TS, CAT1-2, CAT3-5 categories are plotted on top of SST.
+TD, TS, CAT1–2, CAT3–5 categories are plotted on top of SST.
 """
 
 import glob
@@ -59,7 +59,7 @@ def extract_tc_points(ships_df: pd.DataFrame, npz_files: list):
 
 
 def categorize_tc(lats: list, lons: list, winds: list) -> dict:
-    """Categorize TC points by wind speed into TD, TS, CAT1-2, CAT3-5."""
+    """Categorize TC points by wind speed into TD, TS, CAT1–2, CAT3–5."""
     categories = {
         'TD': ([], []),
         'TS': ([], []),
@@ -138,24 +138,32 @@ def plot_tc_sst(categories: dict, sst_avg, lon: list, lat: list, extent: tuple):
     # Plot TC categories
     ax.scatter(categories['TD'][1], categories['TD'][0], color='yellow', s=10, label='TD')
     ax.scatter(categories['TS'][1], categories['TS'][0], color='orange', s=10, label='TS')
-    ax.scatter(categories['CAT12'][1], categories['CAT12'][0], color='red', s=10, label='CAT 1-2')
-    ax.scatter(categories['CAT35'][1], categories['CAT35'][0], color='magenta', s=10, label='CAT 3-5')
+    ax.scatter(categories['CAT12'][1], categories['CAT12'][0], color='red', s=10, label='CAT 1–2')
+    ax.scatter(categories['CAT35'][1], categories['CAT35'][0], color='magenta', s=10, label='CAT 3–5')
 
     ax.set_title('Atlantic and Eastern Pacific Analysis Cases\n' +
-                 r'with 1995-2024 May-Nov Sea Surface Temperatures (SSTs) in $^\circ C$')
+                 r'with 1995–2024 May–Nov Sea Surface Temperatures (SSTs) in $^\circ C$')
     plt.xlabel('Longitude')
     plt.ylabel('Latitude')
     plt.legend(loc='upper right', framealpha=0.4)
 
     # Colorbar
     degree_sign = u'\N{DEGREE SIGN}'
-    fig.colorbar(sst_plot, ax=ax, location='bottom', label=f'SST ({degree_sign}C)',
-                ticks=np.arange(18, 31, 1),
-                format=mticker.FixedFormatter(['≤18', '19', '20', '21', '22', '23',
-                                               '24', '25', '26', '27', '28', '29', '≥30']),
-                extend='both')
+    cbar = fig.colorbar(
+        sst_plot,
+        ax=ax,
+        location='bottom',
+        fraction=0.035,
+        aspect=50,
+        pad=0.08,
+        ticks=np.arange(18, 31, 1),
+        format=mticker.FixedFormatter(['≤18', '19', '20', '21', '22', '23',
+                                       '24', '25', '26', '27', '28', '29', '≥30']),
+        extend='both'
+    )
+    cbar.set_label(f'SST ({degree_sign}C)')
     plt.tight_layout()
-    plt.savefig('tc_tracks_sst.png', dpi=300)
+    plt.savefig('dataarea.png', dpi=300)
     plt.close(fig)
 
 
