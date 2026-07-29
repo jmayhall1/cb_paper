@@ -2,7 +2,7 @@
 """
 Last Edited: 10/02/2025
 @author: John Mark Mayhall
-Purpose: Identify cirrus bands in TC quadrants based on shear vector.
+Purpose: Identify cirrus bands in TC quadrants based on diurnal cycle and intensity.
 """
 import glob
 from collections import defaultdict
@@ -14,110 +14,81 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.cm import ScalarMappable
+from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.lines import Line2D
 from scipy.stats import mannwhitneyu
 from shear_multi import mp_running, init_worker
+from statsmodels.stats.multitest import multipletests
 
 
 def diurnal_color(hour):
-    """Map 3-hour bin center to diurnal regime color."""
     hour = int(hour) % 24
-
     if 0 <= hour < 6:
-        return 'black'       # 0–5
+        return 'black'
     elif 6 <= hour < 12:
-        return 'orange'       # 6–11
+        return 'orange'
     elif 12 <= hour < 18:
-        return 'blue'     # 12–17
+        return 'blue'
     else:
-        return 'magenta'     # 18–23
+        return 'magenta'
 
 
 def intensity_color(intensity):
-    """Return color based on TC intensity regime."""
-    if intensity < 70:
-        return 'orange'     # TD/TS
-    elif intensity <= 90:
-        return 'red'        # Hurricane
+    if intensity < 64:
+        return 'orange'
+    elif intensity < 96:
+        return 'red'
     else:
-        return 'magenta'    # Major Hurricane
+        return 'magenta'
 
 
 def group_func(data: list, group_labels: list):
-    """
-    Group pixel data by rounded intensity change bins.
-
-    Converts raw pixel counts to percentage of domain (1024x1024).
-    Returns:
-        grouped_data : list of lists (pixel % per bin)
-        grouped_labels : list of lists (bin labels)
-    """
-    df = pd.DataFrame({
-        "label": group_labels,
-        "data": data
-    }).dropna()
-
-    # Convert to % once (vectorized)
+    df = pd.DataFrame({"label": group_labels, "data": data}).dropna()
     df["data"] = (df["data"] / (1024 * 1024)) * 100
-
     grouped = df.groupby("label")["data"].apply(list).sort_index()
-
     return grouped.tolist(), [[k] * len(v) for k, v in grouped.items()]
 
 
-def fig_to_rgb(fig):
-    fig.canvas.draw()
-    w, h = fig.canvas.get_width_height()
-    buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-    return buf.reshape(h, w, 3)
-
-
 def adjacent_values(sorted_array: np.ndarray, q1: float, q3: float) -> tuple[float, float]:
-    """Compute whisker limits for violin/box plots."""
     iqr = q3 - q1
     upper = min(max(sorted_array[sorted_array <= q3 + 1.5 * iqr], default=q3), max(sorted_array))
     lower = max(min(sorted_array[sorted_array >= q1 - 1.5 * iqr], default=q1), min(sorted_array))
     return lower, upper
 
 
-def compute_pval_grid(data: list) -> np.ndarray:
-    """
-    Compute symmetric Mann-Whitney U p-value matrix.
-    Only computes upper triangle and mirrors.
-    """
+def compute_pval_rbc_grid(data: list) -> tuple[np.ndarray, np.ndarray]:
     n = len(data)
-    p_grid = np.full((n, n), np.nan)
+    p_grid, rbc_grid = np.full((n, n), np.nan), np.full((n, n), np.nan)
+    p_values_list, rbc_list, indices = [], [], []
 
     for i in range(n):
-        for j in range(i, n):
-            _, p = mannwhitneyu(data[i], data[j], alternative='two-sided')
-            p_grid[i, j] = p
-            p_grid[j, i] = p
+        for j in range(i + 1, n):
+            if len(data[i]) == 0 or len(data[j]) == 0: continue
+            try:
+                u_stat, p = mannwhitneyu(data[i], data[j], alternative='two-sided')
+                p_values_list.append(p)
+                indices.append((i, j))
+                n1, n2 = len(data[i]), len(data[j])
+                rbc_list.append(abs(1 - (2 * u_stat) / (n1 * n2)))
+            except ValueError:
+                pass
 
-    return p_grid
+    if len(p_values_list) > 0:
+        _, corrected_p_values, _, _ = multipletests(pvals=p_values_list, alpha=0.05, method='fdr_bh')
+        for (i, j), p_corr, rbc in zip(indices, corrected_p_values, rbc_list):
+            p_grid[i, j] = p_grid[j, i] = p_corr
+            rbc_grid[i, j] = rbc_grid[j, i] = rbc
+
+    return p_grid, rbc_grid
 
 
 def clean_func(list1: list, list2: list) -> list:
-    """
-    Function for removing None values from list
-    :param list1: First list to be cleaned
-    :param list2: Second list to be cleaned
-    :return: The two cleaned lists
-    """
-    none_indices = ([i for i, v in enumerate(list1) if v is None] +
-                    [i for i, v in enumerate(list2) if v is None])
+    none_indices = ([i for i, v in enumerate(list1) if v is None] + [i for i, v in enumerate(list2) if v is None])
+    return [v for i, v in enumerate(list1) if i not in none_indices], [v for i, v in enumerate(list2) if
+                                                                       i not in none_indices]
 
-    # Remove None values
-    cleaned_list1 = [v for i, v in enumerate(list1) if i not in none_indices]
-    cleaned_list2 = [v for i, v in enumerate(list2) if i not in none_indices]
-    return cleaned_list1, cleaned_list2
 
 def split_basin(results: dict):
-    """
-    Function to split analysis results by basin.
-    :param results: Analysis results
-    :return: Split Results
-    """
     results_al = {k: [] for k in results}
     results_ep = {k: [] for k in results}
     for idx, storm_id in enumerate(results['id_list']):
@@ -129,475 +100,268 @@ def split_basin(results: dict):
     return results_al, results_ep
 
 
-# ================= Clean data =================
 def clean_all(results: dict) -> dict:
-    """
-    Function to run help clean function
-    :param results: Analysis results
-    :return: Cleaned analysis results
-    """
-    results['diurnal_pixel'], results['diurnal_count'] = clean_func(results['diurnal_pixel'],
-                                                                    results['diurnal_count'])
+    results['diurnal_pixel'], results['diurnal_count'] = clean_func(results['diurnal_pixel'], results['diurnal_count'])
     results['intensity_pixel'], results['intensity_count'] = clean_func(results['intensity_pixel'],
                                                                         results['intensity_count'])
     return results
 
 
-def plot_violin_2panel_diurnal(data1, labels1, data2, labels2, suptitle, xlabel, ylabel, filename):
-    """
-    Plot two side-by-side violin plots: violins + quartiles from 3-hour bins, hourly medians as a line.
-    """
+# ================= Helper Binning Functions =================
+def bin_data_diurnal(data: list, labels: list):
+    bins = defaultdict(list)
+    for group, label_group in zip(data, labels):
+        for val, hr in zip(group, label_group):
+            binned_hr = (3 * np.round(hr / 3)) % 24
+            bins[binned_hr].append(val)
+    bin_centers = list(range(0, 24, 3))
+    return [bins.get(bc, []) for bc in bin_centers], bin_centers
 
-    def plot_single_violin(ax: plt.axis, data: list, labels: list, panel_title: str):
-        # --- Bin data into 3-hour intervals ---
-        bin_centers = list(range(0, 24, 3))  # 0, 3, ..., 21
-        bins = defaultdict(list)
-        for group, label_group in zip(data, labels):
-            for val, hr in zip(group, label_group):
-                binned_hr = (3 * np.round(hr / 3)) % 24  # ensures 24 → 0 bin
-                bins[binned_hr].append(val)
 
-        # --- Prepare violin data ---
-        violin_data = [bins[bc] for bc in bin_centers if bc in bins]
-        violin_positions = [bc for bc in bin_centers if bc in bins]
+def bin_data_intensity(data: list, labels: list):
+    bins = defaultdict(list)
+    for group, label_group in zip(data, labels):
+        for val, lab in zip(group, label_group):
+            binned_lab = (10 * (int(lab) // 10))
+            bins[binned_lab].append(val)
+    bin_centers = list(range(20, 161, 10))
+    return [bins.get(bc, []) for bc in bin_centers], bin_centers
 
-        # Compute quartiles and whiskers for each group manually
-        quartile1, medians, quartile3 = [], [], []
-        whiskers_min, whiskers_max = [], []
 
-        for group in violin_data:
-            group = np.asarray(group, dtype=float)
-            group = group[np.isfinite(group)]
+# ================= Single-Axis Plotting: Diurnal =================
+def plot_violin_single_diurnal(ax, data, labels, title, y_label=None):
+    raw_data, all_positions = bin_data_diurnal(data, labels)
 
-            if group.size == 0:
-                quartile1.append(np.nan)
-                medians.append(np.nan)
-                quartile3.append(np.nan)
-                whiskers_min.append(np.nan)
-                whiskers_max.append(np.nan)
-                continue
+    # 1. NEW: Filter out empty bins to avoid zero-size array error in violinplot
+    violin_data = [d for d in raw_data if len(d) > 0]
+    violin_positions = [p for d, p in zip(raw_data, all_positions) if len(d) > 0]
 
-            q1, med, q3 = np.percentile(group, [25, 50, 75])
-            whisk_min, whisk_max = adjacent_values(group, q1, q3)
+    # 2. NEW: Fallback if the array is entirely empty
+    if not violin_data:
+        return []
 
-            quartile1.append(float(q1))
-            medians.append(float(med))
-            quartile3.append(float(q3))
-            whiskers_min.append(float(whisk_min))
-            whiskers_max.append(float(whisk_max))
+    quartile1, medians, quartile3, whiskers_min, whiskers_max = [], [], [], [], []
+    for group in violin_data:
+        # Now guaranteed to only process arrays that actually have data
+        group = np.asarray(group, dtype=float)
+        group = group[np.isfinite(group)]
+        if group.size == 0:
+            quartile1.append(np.nan);
+            medians.append(np.nan);
+            quartile3.append(np.nan)
+            whiskers_min.append(np.nan);
+            whiskers_max.append(np.nan)
+            continue
+        q1, med, q3 = np.percentile(group, [25, 50, 75])
+        whisk_min, whisk_max = adjacent_values(group, q1, q3)
+        quartile1.append(q1);
+        medians.append(med);
+        quartile3.append(q3)
+        whiskers_min.append(whisk_min);
+        whiskers_max.append(whisk_max)
 
-        # --- Plot violins ---
-        ax.tick_params(axis='both', labelsize=18)
-        parts = ax.violinplot(
-            violin_data, positions=violin_positions, showmeans=False,
-            showmedians=False, showextrema=False, widths=2
-        )
-        for pc in parts['bodies']:
-            pc.set_facecolor('#FFA500')
-            pc.set_edgecolor('black')
-            pc.set_alpha(1)
+    parts = ax.violinplot(violin_data, positions=violin_positions, showmeans=False, showmedians=False,
+                          showextrema=False, widths=2)
+    for pc in parts['bodies']:
+        pc.set_facecolor('#FFA500')
+        pc.set_edgecolor('black')
+        pc.set_alpha(1)
 
-        ax.scatter(violin_positions, medians, color='blue', s=80, zorder=3)
-        ax.vlines(violin_positions, quartile1, quartile3, color='k', lw=5)
-        ax.vlines(violin_positions, whiskers_min, whiskers_max, color='k', lw=2)
+    ax.scatter(violin_positions, medians, color='blue', s=80, zorder=3)
+    ax.vlines(violin_positions, quartile1, quartile3, color='k', lw=5)
+    ax.vlines(violin_positions, whiskers_min, whiskers_max, color='k', lw=2)
 
-        # --- Formatting ---
-        ax.set_xlim((-2, 23))
-        ax.set_xticks(range(0, 24, 3))
-        ax.set_xticklabels(np.arange(0, 24, 3))
-        ax.set_ylim((0, 60))
-        ax.set_title(panel_title, fontsize=28)
-        ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
-
-        # --- Sample counts ---
-        for pos, values in zip(violin_positions, violin_data):
-            if len(values) == 0:
-                continue
-            y = min(max(values) + 2, 60)
-            ax.text(
-                pos, y, f'{len(values)}', ha='center', fontsize=18, fontweight='bold',
+    for pos, values in zip(violin_positions, violin_data):
+        if len(values) == 0: continue
+        ax.text(pos, min(max(values) + 2, 60), f'{len(values)}', ha='center', fontsize=18, fontweight='bold',
                 rotation=90, va='center',
-                path_effects=[path_effects.Stroke(linewidth=2, foreground='white'),
-                              path_effects.Normal()]
-            )
+                path_effects=[path_effects.Stroke(linewidth=2, foreground='white'), path_effects.Normal()])
 
-    # --- Create horizontal 2-panel plot ---
-    fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-    plot_single_violin(axes[0], data1, labels1, 'Atlantic')
-    plot_single_violin(axes[1], data2, labels2, 'Eastern Pacific')
-
-    fig.suptitle(suptitle, fontsize=28)
-    fig.supxlabel(xlabel, fontsize=28)
-    fig.supylabel(ylabel, fontsize=28, x=0.05)
-    plt.savefig(filename)
-    return fig, axes
+    ax.set_xlim((-2, 23))
+    ax.set_ylim((0, 60))
+    ax.set_xticks(range(0, 24, 3))
+    ax.tick_params(axis='both', labelsize=16)
+    ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
+    ax.set_title(title, fontsize=20)
+    if y_label: ax.set_ylabel(y_label, fontsize=20)
 
 
-def plot_contourf_2panel_diurnal(data1: list, labels1: list, data2: list, labels2: list, suptitle: str, xlabel: str,
-                         ylabel: str, filename: str):
-    """
-    Plot p-values after binning data into 3-hour intervals.
-    """
+def plot_pvals_single_diurnal(ax, data, labels, title, y_label=None):
+    binned_data, centers = bin_data_diurnal(data, labels)
+    pvals, rbc = compute_pval_rbc_grid(binned_data)
 
-    def bin_data_by_3hr(data: list, labels: list):
-        """
-        Bin data into 3-hourly bins centered on 0, 3, ..., 21.
-        The 24-hour bin wraps into 0.
-        """
-        bins = defaultdict(list)  # key: (x_bin, y_bin) => list of values
+    x, y = np.meshgrid(centers, centers)
+    mask = (np.array(pvals).ravel() < 0.05) & (np.array(rbc).ravel() > 0.05)
+    x_masked, y_masked = x.ravel()[mask], y.ravel()[mask]
 
-        for group, label_group in zip(data, labels):
-            for val, (x_hr, y_hr) in zip(group, zip(label_group, label_group)):
-                # Wrap 24 -> 0
-                x_bin = (3 * np.round(x_hr / 3)) % 24
-                y_bin = (3 * np.round(y_hr / 3)) % 24
-                bins[(x_bin, y_bin)].append(val)
-
-        bin_centers = list(range(0, 24, 3))
-        grid = [[bins.get((x, y), []) for x in bin_centers] for y in bin_centers]
-        return grid, bin_centers
-
-    # Bin and compute p-value grids
-    binned1, centers1 = bin_data_by_3hr(data1, labels1)
-    binned2, centers2 = bin_data_by_3hr(data2, labels2)
-    flat1 = [binned1[i][i] for i in range(len(binned1))]
-    flat2 = [binned2[i][i] for i in range(len(binned2))]
-
-    pvals1 = compute_pval_grid(flat1)
-    pvals2 = compute_pval_grid(flat2)
-
-    fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-
-    # Common tick marks
-    tick_marks = range(0, 24, 3)
-
-    # Left panel (Atlantic)
-    x, y = np.meshgrid(centers1, centers1)
-    z = np.array(pvals1)
-    x_flat = x.ravel()
-    y_flat = y.ravel()
-    z_flat = z.ravel()
-    mask = z_flat < 0.05
-    x_masked = x_flat[mask]
-    y_masked = y_flat[mask]
     for x_val, y_val in zip(x_masked, y_masked):
-        color_x = diurnal_color(x_val)
-        color_y = diurnal_color(y_val)
+        ax.plot(x_val, y_val, marker='o', markersize=np.sqrt(250),
+                markerfacecolor=diurnal_color(x_val), markerfacecoloralt=diurnal_color(y_val),
+                markeredgecolor='black', markeredgewidth=1.2, fillstyle='left', linestyle='None', zorder=3)
 
-        marker_size = np.sqrt(250)
+    ax.set_xlim((-1, 23))
+    ax.set_ylim((-1, 23))
+    ax.set_xticks(range(0, 24, 3))
+    ax.set_yticks(range(0, 24, 3))
+    ax.tick_params(axis='both', labelsize=16)
+    ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
+    ax.set_title(title, fontsize=20)
+    if y_label: ax.set_ylabel(y_label, fontsize=20)
 
-        axes[0].plot(
-            x_val, y_val,
-            marker='o',
-            markersize=marker_size,
-            markerfacecolor=color_x,
-            markerfacecoloralt=color_y,
-            markeredgecolor='black',
-            markeredgewidth=1.2,
-            fillstyle='left',
-            linestyle='None',
-            zorder=3
-        )
-    axes[0].set_xlim((-1, 22))
-    axes[0].set_ylim((-1, 22))
-    axes[0].set_xticks(tick_marks)
-    axes[0].set_yticks(tick_marks)
-    axes[0].set_xticklabels(tick_marks)
-    axes[0].set_yticklabels(tick_marks)
-    axes[0].set_title('Atlantic', fontsize=28)
-    axes[0].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
-    axes[0].tick_params(axis='both', labelsize=18)
 
-    # Right panel (Eastern Pacific)
-    x, y = np.meshgrid(centers2, centers2)
-    z = np.array(pvals2)
-    x_flat = x.ravel()
-    y_flat = y.ravel()
-    z_flat = z.ravel()
-    mask = z_flat < 0.05
-    x_masked = x_flat[mask]
-    y_masked = y_flat[mask]
-    for x_val, y_val in zip(x_masked, y_masked):
-        color_x = diurnal_color(x_val)
-        color_y = diurnal_color(y_val)
+def plot_rbc_single_diurnal(ax, data, labels, title, y_label=None):
+    binned_data, centers = bin_data_diurnal(data, labels)
+    pvals, rbc = compute_pval_rbc_grid(binned_data)
 
-        marker_size = np.sqrt(250)
+    base = plt.get_cmap("coolwarm")
+    cmap = LinearSegmentedColormap.from_list("coolwarm_trimmed", np.vstack([
+        base(np.linspace(0.00, 0.30, 128)), base(np.linspace(0.70, 1.00, 128))
+    ]))
 
-        axes[1].plot(
-            x_val, y_val,
-            marker='o',
-            markersize=marker_size,
-            markerfacecolor=color_x,
-            markerfacecoloralt=color_y,
-            markeredgecolor='black',
-            markeredgewidth=1.2,
-            fillstyle='left',
-            linestyle='None',
-            zorder=3
-        )
-    axes[1].set_xlim((-1, 23))
-    axes[1].set_ylim((-1, 23))
-    axes[1].set_xticks(tick_marks)
-    axes[1].set_yticks(tick_marks)
-    axes[1].set_xticklabels(tick_marks)
-    axes[1].set_yticklabels(tick_marks)
-    axes[1].set_title('Eastern Pacific', fontsize=28)
-    axes[1].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
-    axes[1].tick_params(axis='both', labelsize=18)
+    x, y = np.meshgrid(centers, centers)
+    mask = (np.array(pvals).ravel() < 0.05) & (np.array(rbc).ravel() > 0.05)
+    x_masked, y_masked, rbc_masked = x.ravel()[mask], y.ravel()[mask], np.array(rbc).ravel()[mask]
 
-    # Final layout
-    fig.subplots_adjust(bottom=0.25)
-    fig.suptitle(suptitle, fontsize=28, y=0.98)
-    fig.supxlabel(xlabel, fontsize=28, y=0.13)
-    fig.supylabel(ylabel, fontsize=28, x=0.05)
+    for x_val, y_val, rbc_val in zip(x_masked, y_masked, rbc_masked):
+        ax.text(x_val, y_val, f"{rbc_val * 100:.0f}", color=cmap(rbc_val), ha='center', va='center', fontweight='bold',
+                fontsize=18)
 
-    # Add legend
-    legend_elements = [
-        Line2D([0], [0], marker='o', color='w', markerfacecolor='black', markersize=12, label='Overnight'),
-        Line2D([0], [0], marker='o', color='w', markerfacecolor='orange', markersize=12, label='Morning'),
-        Line2D([0], [0], marker='o', color='w', markerfacecolor='blue', markersize=12, label='Afternoon'),
-        Line2D([0], [0], marker='o', color='w', markerfacecolor='magenta', markersize=12, label='Evening')
-    ]
+    ax.set_xlim((-1, 23))
+    ax.set_ylim((-1, 23))
+    ax.set_xticks(range(0, 24, 3))
+    ax.set_yticks(range(0, 24, 3))
+    ax.tick_params(axis='both', labelsize=16)
+    ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
+    ax.set_title(title, fontsize=20)
+    if y_label: ax.set_ylabel(y_label, fontsize=20)
 
-    fig.legend(handles=legend_elements, loc='upper right', fontsize=20, framealpha=0)
-    plt.savefig(filename)
-    return fig, axes
 
-def plot_violin_2panel_intensity(data1, labels1, data2, labels2, suptitle, xlabel, ylabel, filename):
-    """
-    Plot two side-by-side violin plots: violins + quartiles from 3-hour bins, hourly medians as a line.
-    """
+# ================= Single-Axis Plotting: Intensity =================
+def plot_violin_single_intensity(ax, data, labels, title, y_label=None):
+    raw_data, all_positions = bin_data_intensity(data, labels)
 
-    def plot_single_violin(ax: plt.axis, data: list, labels: list, panel_title: str):
-        # --- Bin data into 3-hour intervals ---
-        bin_centers = list(range(20, 161, 10))  # 0, 3, ..., 21
-        bins = defaultdict(list)
-        for group, label_group in zip(data, labels):
-            for val, lab in zip(group, label_group):
-                binned_lab = (10 * (lab // 10))  # ensures 24 → 0 bin
-                bins[binned_lab].append(val)
+    # 1. NEW: Filter out empty bins to avoid zero-size array error in violinplot
+    violin_data = [d for d in raw_data if len(d) > 0]
+    violin_positions = [p for d, p in zip(raw_data, all_positions) if len(d) > 0]
 
-        # --- Prepare violin data ---
-        violin_positions = np.array(sorted(bins.keys()), dtype=float)
-        violin_data = [np.asarray(bins[bc], dtype=float) for bc in violin_positions]
+    # 2. NEW: Fallback if the array is entirely empty
+    if not violin_data:
+        return []
 
-        # Compute quartiles and whiskers for each group manually
-        quartile1, medians, quartile3 = [], [], []
-        whiskers_min, whiskers_max = [], []
+    quartile1, medians, quartile3, whiskers_min, whiskers_max = [], [], [], [], []
+    for group in violin_data:
+        group = np.asarray(group, dtype=float)
+        group = group[np.isfinite(group)]
+        if group.size == 0:
+            quartile1.append(np.nan);
+            medians.append(np.nan);
+            quartile3.append(np.nan)
+            whiskers_min.append(np.nan);
+            whiskers_max.append(np.nan)
+            continue
+        q1, med, q3 = np.percentile(group, [25, 50, 75])
+        whisk_min, whisk_max = adjacent_values(group, q1, q3)
+        quartile1.append(q1);
+        medians.append(med);
+        quartile3.append(q3)
+        whiskers_min.append(whisk_min);
+        whiskers_max.append(whisk_max)
 
-        for group in violin_data:
-            group = np.asarray(group, dtype=float)
-            group = group[np.isfinite(group)]
+    parts = ax.violinplot(violin_data, positions=violin_positions, showmeans=False, showmedians=False,
+                          showextrema=False, widths=8)
+    for pc in parts['bodies']:
+        pc.set_facecolor('#FFA500')
+        pc.set_edgecolor('black')
+        pc.set_alpha(1)
 
-            if group.size == 0:
-                quartile1.append(np.nan)
-                medians.append(np.nan)
-                quartile3.append(np.nan)
-                whiskers_min.append(np.nan)
-                whiskers_max.append(np.nan)
-                continue
+    ax.scatter(violin_positions, medians, color='blue', s=80, zorder=3)
+    ax.vlines(violin_positions, quartile1, quartile3, color='k', lw=5)
+    ax.vlines(violin_positions, whiskers_min, whiskers_max, color='k', lw=2)
 
-            q1, med, q3 = np.percentile(group, [25, 50, 75])
-            whisk_min, whisk_max = adjacent_values(group, q1, q3)
+    line_ts = ax.axvline(x=65, color='orange', linestyle='--', lw=3, label='TS/HUR Transition')
+    line_maj = ax.axvline(x=95, color='magenta', linestyle='--', lw=3, label='HUR/MAJ HUR Transition')
 
-            quartile1.append(float(q1))
-            medians.append(float(med))
-            quartile3.append(float(q3))
-            whiskers_min.append(float(whisk_min))
-            whiskers_max.append(float(whisk_max))
-
-        # --- Plot violins ---
-        ax.tick_params(axis='both', labelsize=18)
-        parts = ax.violinplot(
-            violin_data, positions=violin_positions, showmeans=False,
-            showmedians=False, showextrema=False, widths=8
-        )
-        for pc in parts['bodies']:
-            pc.set_facecolor('#FFA500')
-            pc.set_edgecolor('black')
-            pc.set_alpha(1)
-
-        ax.scatter(violin_positions, medians, color='blue', s=80, zorder=3)
-        ax.vlines(violin_positions, quartile1, quartile3, color='k', lw=5)
-        ax.vlines(violin_positions, whiskers_min, whiskers_max, color='k', lw=2)
-        ax.axvline(x=65, color='orange', linestyle='--', lw=3, label='TS/HUR Transition')
-        ax.axvline(x=95, color='magenta', linestyle='--', lw=3, label='HUR/MAJ HUR Transition')
-
-        # --- Formatting ---
-        ax.set_xlim((15, 165))
-        ticks = np.arange(20, 161, 10)
-        labels = [str(t) if i % 2 == 0 else '' for i, t in enumerate(ticks)]
-
-        ax.set_xticks(ticks)
-        ax.set_xticklabels(labels, rotation=0)
-        ax.set_ylim((0, 60))
-        ax.set_title(panel_title, fontsize=28)
-        ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
-
-        # --- Sample counts ---
-        for pos, values in zip(violin_positions, violin_data):
-            if len(values) == 0:
-                continue
-            y = min(max(values) + 2, 60)
-            ax.text(
-                pos, y, f'{len(values)}', ha='center', fontsize=18, fontweight='bold',
+    for pos, values in zip(violin_positions, violin_data):
+        if len(values) == 0: continue
+        ax.text(pos, min(max(values) + 2, 60), f'{len(values)}', ha='center', fontsize=18, fontweight='bold',
                 rotation=90, va='center',
-                path_effects=[path_effects.Stroke(linewidth=2, foreground='white'),
-                              path_effects.Normal()]
-            )
+                path_effects=[path_effects.Stroke(linewidth=2, foreground='white'), path_effects.Normal()])
 
-    # --- Create horizontal 2-panel plot ---
-    fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-    plot_single_violin(axes[0], data1, labels1, 'Atlantic')
-    plot_single_violin(axes[1], data2, labels2, 'Eastern Pacific')
-    handles, labels = axes[0].get_legend_handles_labels()
-    by_label = dict(zip(labels, handles))
-    fig.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=15, framealpha=0)
+    ax.set_xlim((15, 165))
+    ax.set_ylim((0, 60))
+    ticks = np.arange(20, 161, 10)
+    ax.set_xticks(ticks)
+    ax.set_xticklabels([str(t) if i % 2 == 0 else '' for i, t in enumerate(ticks)], rotation=0)
+    ax.tick_params(axis='both', labelsize=16)
+    ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
+    ax.set_title(title, fontsize=20)
+    if y_label: ax.set_ylabel(y_label, fontsize=20)
 
-    fig.suptitle(suptitle, fontsize=28, y=0.98)
-    fig.supxlabel(xlabel, fontsize=25, y=0)
-    fig.supylabel(ylabel, fontsize=25, x=0.05)
-    plt.savefig(filename)
-    return fig, axes
+    return [line_ts, line_maj]
 
 
-def plot_contourf_2panel_intensity(data1: list, labels1: list, data2: list, labels2: list, suptitle: str, xlabel: str,
-                         ylabel: str, filename: str):
-    """
-    Plot p-values after binning data into 3-hour intervals.
-    """
+def plot_pvals_single_intensity(ax, data, labels, title, y_label=None):
+    binned_data, centers = bin_data_intensity(data, labels)
+    pvals, rbc = compute_pval_rbc_grid(binned_data)
 
-    def bin_data(data: list, labels: list):
-        """
-        Bin data into 3-hourly bins centered on 0, 3, ..., 21.
-        The 24-hour bin wraps into 0.
-        """
-        bins = defaultdict(list)  # key: (x_bin, y_bin) => list of values
+    x, y = np.meshgrid(centers, centers)
+    mask = (np.array(pvals).ravel() < 0.05) & (np.array(rbc).ravel() > 0.05)
+    x_masked, y_masked = x.ravel()[mask], y.ravel()[mask]
 
-        for group, label_group in zip(data, labels):
-            for val, (x_lab, y_lab) in zip(group, zip(label_group, label_group)):
-                x_bin = int(x_lab) // 10 * 10
-                y_bin = int(y_lab)// 10 * 10
-                bins[(x_bin, y_bin)].append(val)
-
-        bin_centers = list(range(20, 161, 10))
-        grid = [[bins.get((x, y), []) for x in bin_centers] for y in bin_centers]
-        return grid, bin_centers
-
-    # Bin and compute p-value grids
-    binned1, centers1 = bin_data(data1, labels1)
-    binned2, centers2 = bin_data(data2, labels2)
-
-    flat1 = [binned1[i][i] for i in range(len(binned1))]
-    flat2 = [binned2[i][i] for i in range(len(binned2))]
-
-    pvals1 = compute_pval_grid(flat1)
-    pvals2 = compute_pval_grid(flat2)
-
-    fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-
-    # Common tick marks
-    tick_marks = range(20, 161, 10)
-
-    # Left panel (Atlantic)
-    x, y = np.meshgrid(centers1, centers1)
-    z = np.array(pvals1)
-    x_flat = x.ravel()
-    y_flat = y.ravel()
-    z_flat = z.ravel()
-    mask = z_flat < 0.05
-    x_masked = x_flat[mask]
-    y_masked = y_flat[mask]
     for x_val, y_val in zip(x_masked, y_masked):
-        color_x = intensity_color(x_val)
-        color_y = intensity_color(y_val)
+        ax.plot(x_val, y_val, marker='o', markersize=np.sqrt(250),
+                markerfacecolor=intensity_color(x_val), markerfacecoloralt=intensity_color(y_val),
+                markeredgecolor='black', markeredgewidth=1.2, fillstyle='left', linestyle='None', zorder=3)
 
-        marker_size = np.sqrt(250)
+    ax.set_xlim((15, 165))
+    ax.set_ylim((15, 165))
+    ticks = np.arange(20, 161, 10)
+    tick_labels = [str(t) if i % 2 == 0 else '' for i, t in enumerate(ticks)]
+    ax.set_xticks(ticks);
+    ax.set_xticklabels(tick_labels, rotation=0)
+    ax.set_yticks(ticks);
+    ax.set_yticklabels(tick_labels)
+    ax.tick_params(axis='both', labelsize=16)
+    ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
+    ax.set_title(title, fontsize=20)
+    if y_label: ax.set_ylabel(y_label, fontsize=20)
 
-        axes[0].plot(
-            x_val, y_val,
-            marker='o',
-            markersize=marker_size,
-            markerfacecolor=color_x,  # left half
-            markerfacecoloralt=color_y,  # right half
-            markeredgecolor='black',
-            markeredgewidth=1.2,
-            fillstyle='left',
-            linestyle='None',
-            zorder=3
-        )
-    axes[0].set_xlim((15, 165))
-    axes[0].set_ylim((15, 165))
-    labels = [str(t) if i % 2 == 0 else '' for i, t in enumerate(tick_marks)]
-    axes[0].set_xticks(tick_marks)
-    axes[0].set_xticklabels(labels, rotation=0)
-    axes[0].set_yticks(tick_marks)
-    axes[0].set_yticklabels(labels)
-    axes[0].set_title('Atlantic', fontsize=28)
-    axes[0].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
-    axes[0].tick_params(axis='both', labelsize=18)
 
-    # Right panel (Eastern Pacific)
-    x, y = np.meshgrid(centers2, centers2)
-    z = np.array(pvals2)
-    x_flat = x.ravel()
-    y_flat = y.ravel()
-    z_flat = z.ravel()
-    mask = z_flat < 0.05
-    x_masked = x_flat[mask]
-    y_masked = y_flat[mask]
-    for x_val, y_val in zip(x_masked, y_masked):
-        color_x = intensity_color(x_val)
-        color_y = intensity_color(y_val)
+def plot_rbc_single_intensity(ax, data, labels, title, y_label=None):
+    binned_data, centers = bin_data_intensity(data, labels)
+    pvals, rbc = compute_pval_rbc_grid(binned_data)
 
-        marker_size = np.sqrt(250)
+    base = plt.get_cmap("coolwarm")
+    cmap = LinearSegmentedColormap.from_list("coolwarm_trimmed", np.vstack([
+        base(np.linspace(0.00, 0.30, 128)), base(np.linspace(0.70, 1.00, 128))
+    ]))
 
-        axes[1].plot(
-            x_val, y_val,
-            marker='o',
-            markersize=marker_size,
-            markerfacecolor=color_x,
-            markerfacecoloralt=color_y,
-            markeredgecolor='black',
-            markeredgewidth=1.2,
-            fillstyle='left',
-            linestyle='None',
-            zorder=3
-        )
-    axes[1].set_xlim((15, 165))
-    axes[1].set_ylim((15, 165))
-    labels = [str(t) if i % 2 == 0 else '' for i, t in enumerate(tick_marks)]
-    axes[1].set_xticks(tick_marks)
-    axes[1].set_xticklabels(labels, rotation=0)
-    axes[1].set_yticks(tick_marks)
-    axes[1].set_yticklabels(labels)
-    axes[1].set_title('Eastern Pacific', fontsize=28)
-    axes[1].grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
-    axes[1].tick_params(axis='both', labelsize=18)
+    x, y = np.meshgrid(centers, centers)
+    mask = (np.array(pvals).ravel() < 0.05) & (np.array(rbc).ravel() > 0.05)
+    x_masked, y_masked, rbc_masked = x.ravel()[mask], y.ravel()[mask], np.array(rbc).ravel()[mask]
 
-    # Final layout
-    fig.subplots_adjust(bottom=0.25)
-    fig.suptitle(suptitle, fontsize=28, y=0.98)
-    fig.supxlabel(xlabel, fontsize=28, y=0.13)
-    fig.supylabel(ylabel, fontsize=28, x=0.05)
+    for x_val, y_val, rbc_val in zip(x_masked, y_masked, rbc_masked):
+        ax.text(x_val, y_val, f"{rbc_val * 100:.0f}", color=cmap(rbc_val), ha='center', va='center', fontweight='bold',
+                fontsize=18)
 
-    legend_elements = [
-        Line2D([0], [0], marker='o', color='w', markerfacecolor='orange', markersize=12, label='TD/TS'),
-        Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=12, label='HUR'),
-        Line2D([0], [0], marker='o', color='w', markerfacecolor='magenta', markersize=12, label='MAJ HUR')
-    ]
-
-    fig.legend(handles=legend_elements, loc='upper right', fontsize=12, framealpha=0)
-    plt.savefig(filename)
-    return fig, axes
+    ax.set_xlim((15, 165))
+    ax.set_ylim((15, 165))
+    ticks = np.arange(20, 161, 10)
+    tick_labels = [str(t) if i % 2 == 0 else '' for i, t in enumerate(ticks)]
+    ax.set_xticks(ticks);
+    ax.set_xticklabels(tick_labels, rotation=0)
+    ax.set_yticks(ticks);
+    ax.set_yticklabels(tick_labels)
+    ax.tick_params(axis='both', labelsize=16)
+    ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
+    ax.set_title(title, fontsize=20)
+    if y_label: ax.set_ylabel(y_label, fontsize=20)
 
 
 if __name__ == '__main__':
     # ======================== Config ========================
     cut_off = 0.02
     ri_thresh, rw_thresh = 30, -20
-    pix_threshold = min_wind_threshold = -np.inf
-    max_wind_threshold = np.inf
     online, save_state = True, False
     base_dir = '/rstor/jmayhall/' if online else '//uahdata/rstor/'
 
@@ -618,40 +382,24 @@ if __name__ == '__main__':
     path_len = len(paths['c13']) - 1
     wind_dict = pd.read_csv(paths['ships'], sep='\t', index_col=0)
 
-    # Normalize for plotting
-    norm = mpl.colors.Normalize(vmin=0.049, vmax=1)
-    sm = ScalarMappable(cmap='gist_ncar', norm=norm)
-    sm.set_array([])
-
-    # =================== Parallel Args =======================
     needed_args = [{
-        'i': i,
-        'file': file,
-        'path_len': path_len,
-        'paths': paths,
-        'c8_scaled': c8_scaled
+        'i': i, 'file': file, 'path_len': path_len, 'paths': paths, 'c8_scaled': c8_scaled
     } for i, file in enumerate(c13_scaled)]
 
-    # ================== Collect Results =======================
     results = {
         'diurnal_pixel': [], 'diurnal_count': [],
         'intensity_pixel': [], 'intensity_count': [],
         'id_list': []
     }
 
-    # Parallel processing
     with Pool(12, initializer=init_worker) as pool:
         for result in pool.map(mp_running, needed_args):
-            if result is None:
-                continue
+            if result is None: continue
             diurnal_count, intensity_count, pixels, atcf_id = result
-
-            # Append results
             results['diurnal_pixel'].append(pixels)
             results['diurnal_count'].append(diurnal_count)
             results['intensity_pixel'].append(pixels)
             results['intensity_count'].append(int(intensity_count))
-
             results['id_list'].append(atcf_id)
 
     results_al, results_ep = split_basin(results)
@@ -659,55 +407,71 @@ if __name__ == '__main__':
     results_al = clean_all(results_al)
     results_ep = clean_all(results_ep)
 
-    # ==================== Violin & Contour Plots for Basins =====================
-    data_al, labels_al = group_func(results_al['diurnal_pixel'], results_al['diurnal_count'])
-    data_ep, labels_ep = group_func(results_ep['diurnal_pixel'], results_ep['diurnal_count'])
-    fig1, _ = plot_violin_2panel_diurnal(data_al, labels_al, data_ep, labels_ep,
-                       suptitle='CB Occurrences vs Diurnal Cycle Stage',
-                       xlabel='Local Solar Time',
-                       ylabel='Percentage of Storm Pixels with CBs',
-                       filename='diurnal_violin_ALEP.png')
-    fig2, _ = plot_contourf_2panel_diurnal(data_al, labels_al, data_ep, labels_ep,
-                         suptitle='Diurnal Cycle Mann-Whitney P-Values',
-                         xlabel='Local Solar Time',
-                         ylabel='Local Solar Time',
-                         filename='diurnal_mannwhitney_ALEP.png')
+    # ==================== Generate 2x3 Plot: Diurnal =====================
+    data_al_d, labels_al_d = group_func(results_al['diurnal_pixel'], results_al['diurnal_count'])
+    data_ep_d, labels_ep_d = group_func(results_ep['diurnal_pixel'], results_ep['diurnal_count'])
 
-    img1 = fig_to_rgb(fig1)
-    img2 = fig_to_rgb(fig2)
+    fig_d, axes_d = plt.subplots(2, 3, figsize=(28, 16), sharex=True)
+    fig_d.suptitle('CB Occurrences vs Diurnal Cycle Stage', fontsize=32)
 
-    fig, ax = plt.subplots(
-        figsize=(img1.shape[1] / 100, (img1.shape[0] + img2.shape[0]) / 100)
-    )
+    plot_violin_single_diurnal(axes_d[0, 0], data_al_d, labels_al_d, 'AL: Violin Plot',
+                               y_label='Percentage of Storm Pixels with CBs')
+    plot_pvals_single_diurnal(axes_d[0, 1], data_al_d, labels_al_d, 'AL: Mann-Whitney P-Values',
+                              y_label='Local Solar Time')
+    plot_rbc_single_diurnal(axes_d[0, 2], data_al_d, labels_al_d, 'AL: Rank-Biserial Correlations',
+                            y_label='Local Solar Time')
 
-    ax.imshow(np.vstack([img1, img2]))
-    ax.axis("off")
+    plot_violin_single_diurnal(axes_d[1, 0], data_ep_d, labels_ep_d, 'EP: Violin Plot',
+                               y_label='Percentage of Storm Pixels with CBs')
+    plot_pvals_single_diurnal(axes_d[1, 1], data_ep_d, labels_ep_d, 'EP: Mann-Whitney P-Values',
+                              y_label='Local Solar Time')
+    plot_rbc_single_diurnal(axes_d[1, 2], data_ep_d, labels_ep_d, 'EP: Rank-Biserial Correlations',
+                            y_label='Local Solar Time')
+
+    for j in range(3): axes_d[1, j].set_xlabel('Local Solar Time', fontsize=20)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.93])
+
+    legend_d = [
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='black', markersize=14, label='Overnight'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='orange', markersize=14, label='Morning'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='blue', markersize=14, label='Afternoon'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='magenta', markersize=14, label='Evening')
+    ]
+    fig_d.legend(handles=legend_d, loc='upper center', ncol=4, fontsize=20, bbox_to_anchor=(0.5, 0.93))
 
     plt.savefig("diurnal_combined.png", dpi=300, bbox_inches="tight")
-    plt.close('all')
+    plt.close(fig_d)
 
-    data_al, labels_al = group_func(results_al['intensity_pixel'], results_al['intensity_count'])
-    data_ep, labels_ep = group_func(results_ep['intensity_pixel'], results_ep['intensity_count'])
-    fig1, _ = plot_violin_2panel_intensity(data_al, labels_al, data_ep, labels_ep,
-                       suptitle='CB Occurrences vs TC Intensity',
-                       xlabel='TC Current Wind Speed (kts)',
-                       ylabel='Percentage of Storm Pixels with CBs',
-                       filename='intensity_violin_ALEP.png')
-    fig2, _ = plot_contourf_2panel_intensity(data_al, labels_al, data_ep, labels_ep,
-                         suptitle='TC Intensity Mann-Whitney P-Values',
-                         xlabel='Intensity (kts)',
-                         ylabel='Intensity (kts)',
-                         filename='intensity_mannwhitney_ALEP.png')
+    # ==================== Generate 2x3 Plot: Intensity =====================
+    data_al_i, labels_al_i = group_func(results_al['intensity_pixel'], results_al['intensity_count'])
+    data_ep_i, labels_ep_i = group_func(results_ep['intensity_pixel'], results_ep['intensity_count'])
 
-    img1 = fig_to_rgb(fig1)
-    img2 = fig_to_rgb(fig2)
+    fig_i, axes_i = plt.subplots(2, 3, figsize=(28, 16), sharex=True)
+    fig_i.suptitle('CB Occurrences vs TC Intensity', fontsize=32)
 
-    fig, ax = plt.subplots(
-        figsize=(img1.shape[1] / 100, (img1.shape[0] + img2.shape[0]) / 100)
-    )
+    lines_al = plot_violin_single_intensity(axes_i[0, 0], data_al_i, labels_al_i, 'AL: Violin Plot',
+                                            y_label='Percentage of Storm Pixels with CBs')
+    plot_pvals_single_intensity(axes_i[0, 1], data_al_i, labels_al_i, 'AL: Mann-Whitney P-Values',
+                                y_label='Intensity (kt)')
+    plot_rbc_single_intensity(axes_i[0, 2], data_al_i, labels_al_i, 'AL: Rank-Biserial Correlations',
+                              y_label='Intensity (kt)')
 
-    ax.imshow(np.vstack([img1, img2]))
-    ax.axis("off")
+    plot_violin_single_intensity(axes_i[1, 0], data_ep_i, labels_ep_i, 'EP: Violin Plot',
+                                 y_label='Percentage of Storm Pixels with CBs')
+    plot_pvals_single_intensity(axes_i[1, 1], data_ep_i, labels_ep_i, 'EP: Mann-Whitney P-Values',
+                                y_label='Intensity (kt)')
+    plot_rbc_single_intensity(axes_i[1, 2], data_ep_i, labels_ep_i, 'EP: Rank-Biserial Correlations',
+                              y_label='Intensity (kt)')
+
+    for j in range(3): axes_i[1, j].set_xlabel('TC Current Wind Speed (kt)', fontsize=20)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.93])
+
+    legend_i = [
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='orange', markersize=14, label='TD–TS'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=14, label='HUR'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='magenta', markersize=14, label='MAJ HUR')
+    ]
+    fig_i.legend(handles=lines_al + legend_i, loc='upper center', ncol=5, fontsize=20, bbox_to_anchor=(0.5, 0.93))
 
     plt.savefig("intensity_combined.png", dpi=300, bbox_inches="tight")
-    plt.close()
+    plt.close(fig_i)

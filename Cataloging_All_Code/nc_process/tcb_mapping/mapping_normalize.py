@@ -38,46 +38,61 @@ def get_needed_files(file_pattern: str, ships_df: pd.DataFrame, lon_bounds: tupl
                           day=int(date_str[6:8]),
                           hour=int(date_str[-4:-2]))
 
-        if (atcf_id in valid_ids and ts in ships_df.index and
-                lon_bounds[0] < ships_df.center_lon.values[0] < lon_bounds[1] and
-                lat_bounds[0] < ships_df.center_lat.values[0] < lat_bounds[1]):
-            needed_files.append(file.replace('shear_process/shear_process_all', 'tcb_mapping/files'))
+        if atcf_id in valid_ids and ts in ships_df.index:
+            # FIX: Get the row(s) specifically for this timestamp instead of the 0th row of the whole df
+            row = ships_df.loc[ts]
+            if isinstance(row, pd.DataFrame):
+                row = row.iloc[0]  # Handle case if there are duplicate timestamps
+
+            if (lon_bounds[0] < row.center_lon < lon_bounds[1] and
+                    lat_bounds[0] < row.center_lat < lat_bounds[1]):
+                needed_files.append(file.replace('shear_process/shear_process_all', 'tcb_mapping/files'))
+
     return needed_files
 
 
-def process_file(file_mp: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Process a single .npz file and return CB pixel counts and total pixel counts."""
+def process_file(file_mp: str) -> tuple[np.ndarray, np.ndarray]:
+    """Process a single .npz file and return 2D numpy arrays of counts."""
     data = np.load(file_mp)
     lon_arr = np.round(data['lon'].flatten(), 1)
     lat_arr = np.round(data['lat'].flatten(), 1)
     pixel_arr = np.round(data['pixels'][0, :, :, 0].flatten(), 1)
 
+    # Use NumPy's histogram2d for a massive speedup over pd.crosstab
+    # Note: np.histogram2d requires bins to be monotonically increasing
+    # Use np.linspace to guarantee exact edge counts.
+    # We need 124 edges for 123 bins (centers -141 to -19)
+    lon_bins = np.linspace(-141.5, -18.5, 124)
+
+    # We need 29 edges for 28 bins (centers 4 to 31)
+    # np.histogram2d needs them in ascending order
+    lat_bins = np.linspace(3.5, 31.5, 29)
+
+    total_counts, _, _ = np.histogram2d(lat_arr, lon_arr, bins=[lat_bins, lon_bins])
+
     mask = pixel_arr > PIXEL_THRESHOLD
-    filtered_lons = lon_arr[mask]
-    filtered_lats = lat_arr[mask]
+    pixel_counts, _, _ = np.histogram2d(lat_arr[mask], lon_arr[mask], bins=[lat_bins, lon_bins])
 
-    pixel_counts = pd.crosstab(filtered_lats, filtered_lons)
-    total_counts = pd.crosstab(lat_arr, lon_arr)
-
-    pixel_df = pd.DataFrame(0, index=LAT_RANGE, columns=LON_RANGE)
-    total_df = pd.DataFrame(0, index=LAT_RANGE, columns=LON_RANGE)
-    pixel_df.update(pixel_counts)
-    total_df.update(total_counts)
-
-    return pixel_df, total_df
+    # Flip vertically to match your original descending latitude index (31 to 4)
+    return np.flipud(pixel_counts), np.flipud(total_counts)
 
 
 def run_parallel(file_list: list) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Run multiprocessing over all needed files and sum results."""
-    pixel_df = pd.DataFrame(0, index=LAT_RANGE, columns=LON_RANGE)
-    total_df = pd.DataFrame(0, index=LAT_RANGE, columns=LON_RANGE)
+    # Accumulate directly in NumPy arrays for speed
+    pixel_total = np.zeros((len(LAT_RANGE), len(LON_RANGE)))
+    tc_total = np.zeros((len(LAT_RANGE), len(LON_RANGE)))
 
     with Pool(NUM_WORKERS) as pool:
-        for i, (px_df, tc_df) in enumerate(pool.imap_unordered(process_file, file_list)):
-            print(f"Processing file {i + 1} of {len(file_list)}")
-            pixel_df = pixel_df.add(px_df)
-            total_df = total_df.add(tc_df)
+        for i, (px_arr, tc_arr) in enumerate(pool.imap_unordered(process_file, file_list)):
+            if i % 10 == 0:  # Print less frequently to avoid I/O bottlenecks
+                print(f"Processing file {i + 1} of {len(file_list)}")
+            pixel_total += px_arr
+            tc_total += tc_arr
 
+    # Convert to DataFrames only at the very end
+    pixel_df = pd.DataFrame(pixel_total, index=LAT_RANGE, columns=LON_RANGE)
+    total_df = pd.DataFrame(tc_total, index=LAT_RANGE, columns=LON_RANGE)
     return pixel_df, total_df
 
 
@@ -85,65 +100,50 @@ def plot_heatmaps(pixel_df: pd.DataFrame, total_df: pd.DataFrame, output_file: s
     """Plot original, normalized, and sample count heatmaps."""
     extent = [-141, -19, 4, 31]
 
+    # FIX: Use layout='constrained' and an aspect-appropriate figsize
     fig, axes = plt.subplots(
         3, 1,
-        figsize=(10, 13),
-        subplot_kw={'projection': ccrs.PlateCarree()}
+        figsize=(10, 8),
+        subplot_kw={'projection': ccrs.PlateCarree()},
+        layout='constrained'
     )
 
     fig.suptitle(
         'Heatmap of the number of CB Pixels from 2019–2023\n'
         'from Atlantic and Eastern Pacific Tropical Cyclones',
-        fontsize=18, y=0.93
+        fontsize=16
     )
-
-    fig.subplots_adjust(top=0.90, bottom=0.08, hspace=0.05)
 
     # -------------------------
     # Panel A: Raw CB counts
     # -------------------------
     im1 = axes[0].imshow(
-        pixel_df.to_numpy(),
-        cmap='gist_heat',
-        origin='lower',
-        extent=extent,
-        vmin=0,
-        vmax=35_000,
-        transform=ccrs.PlateCarree()
+        pixel_df.to_numpy(), cmap='gist_heat', origin='lower',
+        extent=extent, transform=ccrs.PlateCarree()
     )
-    axes[0].set_title('Raw CB Pixel Counts', fontsize=16)
+    axes[0].set_title('Raw CB Pixel Counts', fontsize=14)
 
     # -------------------------
     # Panel B: Normalized %
     # -------------------------
-    normalized = np.nan_to_num(
-        pixel_df.to_numpy() / total_df.to_numpy() * 100
-    )
+    # Prevent division by zero runtime warnings
+    with np.errstate(divide='ignore', invalid='ignore'):
+        normalized = np.nan_to_num((pixel_df.to_numpy() / total_df.to_numpy()) * 100)
 
     im2 = axes[1].imshow(
-        normalized,
-        cmap='gist_heat',
-        origin='lower',
-        extent=extent,
-        vmin=0,
-        vmax=40,
-        transform=ccrs.PlateCarree()
+        normalized, cmap='gist_heat', origin='lower',
+        extent=extent, transform=ccrs.PlateCarree()
     )
-    axes[1].set_title('Normalized (% of Pixels that are CBs)', fontsize=16)
+    axes[1].set_title('Normalized (% of Pixels that are CBs)', fontsize=14)
 
     # -------------------------
     # Panel C: Sample Count (Denominator)
     # -------------------------
     im3 = axes[2].imshow(
-        total_df.to_numpy(),
-        cmap='gist_heat',
-        origin='lower',
-        extent=extent,
-        vmin=0,
-        vmax=160_000,
-        transform=ccrs.PlateCarree()
+        total_df.to_numpy(), cmap='gist_heat', origin='lower',
+        extent=extent, transform=ccrs.PlateCarree()
     )
-    axes[2].set_title('Total Pixel Samples per Bin', fontsize=16)
+    axes[2].set_title('Total Pixel Samples per Bin', fontsize=14)
 
     # -------------------------
     # Common Map Features
@@ -156,28 +156,32 @@ def plot_heatmaps(pixel_df: pd.DataFrame, total_df: pd.DataFrame, output_file: s
         ax.add_feature(cfeature.BORDERS, linestyle='--', edgecolor='white')
         ax.add_feature(cfeature.LAKES, alpha=0.5)
         ax.add_feature(cfeature.STATES, edgecolor='white')
-        ax.add_feature(cfeature.RIVERS)
 
-        gl = ax.gridlines(draw_labels=True, linewidth=1, color='white',
-                          alpha=0.5, linestyle='--')
+        gl = ax.gridlines(draw_labels=True, linewidth=1, color='white', alpha=0.5, linestyle='--')
         gl.xlocator = mticker.FixedLocator([-140, -120, -100, -80, -60, -40, -20])
         gl.ylocator = mticker.FixedLocator([0, 10, 20, 30])
+        gl.top_labels = False
+        gl.right_labels = False
         gl.xformatter = LongitudeFormatter()
         gl.yformatter = LatitudeFormatter()
-        gl.xlabel_style = {'size': 12}
-        gl.ylabel_style = {'size': 12}
+        gl.xlabel_style = {'size': 10}
+        gl.ylabel_style = {'size': 10}
 
     # -------------------------
-    # Colorbars
+    # Colorbars (Horizontal)
     # -------------------------
-    cbar1 = fig.colorbar(im1, ax=axes[0], orientation="horizontal", pad=0.15)
-    cbar1.set_label('Number of CB Pixels', fontsize=14)
+    # shrink=0.55 prevents the colorbar from forcing the subplot to be too wide
+    # aspect=30 makes the colorbar thinner vertically
+    # pad controls the distance between the map and its colorbar
 
-    cbar2 = fig.colorbar(im2, ax=axes[1], orientation="horizontal", pad=0.15)
-    cbar2.set_label('% of Pixels that are CBs', fontsize=14)
+    cbar1 = fig.colorbar(im1, ax=axes[0], orientation="horizontal", shrink=0.55, aspect=30, pad=0.02)
+    cbar1.set_label('Number of CB Pixels', fontsize=12)
 
-    cbar3 = fig.colorbar(im3, ax=axes[2], orientation="horizontal", pad=0.15)
-    cbar3.set_label('Total Number of Pixel Samples', fontsize=14)
+    cbar2 = fig.colorbar(im2, ax=axes[1], orientation="horizontal", shrink=0.55, aspect=30, pad=0.02)
+    cbar2.set_label('% of Pixels that are CBs', fontsize=12)
+
+    cbar3 = fig.colorbar(im3, ax=axes[2], orientation="horizontal", shrink=0.55, aspect=30, pad=0.02)
+    cbar3.set_label('Total Number of Pixel Samples', fontsize=12)
 
     plt.savefig(output_file, dpi=300, bbox_inches="tight")
     plt.close()
@@ -188,18 +192,19 @@ if __name__ == "__main__":
     LON_RANGE = np.round(np.arange(-141, -18.9, 1), 1)
     NUM_WORKERS = 64
     PIXEL_THRESHOLD = 0.02
+
     # --- Atlantic ---
     ships_al = load_ships_data(Path('/rstor/jmayhall/cataloging/nc_process/shear_process/'
                                     'shear_process_all/ships_interp_AL.txt'))
     files_al = get_needed_files('/rstor/jmayhall/cataloging/nc_process/shear_process/'
-                                    'shear_process_all/AL*.npz',
+                                'shear_process_all/AL*.npz',
                                 ships_al, lon_bounds=(-105, -20), lat_bounds=(5, 30))
 
     # --- Eastern Pacific ---
     ships_ep = load_ships_data(Path('/rstor/jmayhall/cataloging/nc_process/shear_process/'
                                     'shear_process_all/ships_interp_EP.txt'))
     files_ep = get_needed_files('/rstor/jmayhall/cataloging/nc_process/shear_process/'
-                                    'shear_process_all/EP*.npz',
+                                'shear_process_all/EP*.npz',
                                 ships_ep, lon_bounds=(-140, -90), lat_bounds=(5, 30))
 
     all_files = files_al + files_ep

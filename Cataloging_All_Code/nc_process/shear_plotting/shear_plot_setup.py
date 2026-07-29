@@ -153,5 +153,5 @@ class Plotting:
 
         # Final figure title and save
         fig.suptitle(f'CB {plot_title} Relative Plots', fontsize=20)
-        plt.savefig(f'{save_title}_heatmap_1024.jpeg', dpi=600)
+        plt.savefig(f'{save_title}_heatmap_1024.jpeg', dpi=1000)
         plt.close(fig)

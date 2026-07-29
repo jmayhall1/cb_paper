@@ -24,7 +24,7 @@ GLOBAL_SHIPS_DF = None
 def intensity_bin(val):
     if val < 64:
         return 0
-    elif val < 95:
+    elif val < 96:
         return 1
     else:
         return 2
@@ -182,7 +182,7 @@ def binning(file: str, bin_degree_size: int, bin_rad_size: int, i_func: int,
 def process_and_plot(df, df_total, type_key):
     print('Processing plots...')
 
-    intensity_bins = {'Weak': (0, 64), 'Moderate': (64, 95), 'Strong': (95, np.inf)}
+    intensity_bins = {'Weak': (0, 64), 'Moderate': (64, 96), 'Strong': (96, np.inf)}
     shear_bins = {'Low': (0, 5), 'Moderate': (5, 11), 'High': (11, np.inf)}
     time_bins = {'Night': (0, 6), 'Morning': (6, 12), 'Afternoon': (12, 18), 'Evening': (18, 24)}
 
@@ -249,7 +249,7 @@ if __name__ == '__main__':
     ships_path = f'{base_path}cataloging/nc_process/violin_plots/shear_process_all/ships_interp.txt'
     ships_df = pd.read_csv(ships_path, sep='\t', index_col=0, parse_dates=True)
 
-    for i in [0, 1, 2]:
+    for i in [0]:
         print(f'Creating {type_dict[i]} Plot')
 
         bin_mp_args = [

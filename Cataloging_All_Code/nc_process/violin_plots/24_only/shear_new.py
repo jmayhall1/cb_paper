@@ -2,7 +2,7 @@
 """
 Last Edited: 07/10/2025
 @author: John Mark Mayhall
-Purpose: Identify cirrus bands in TC quadrants based on shear vector.
+Purpose: Identify cirrus bands in TC quadrants based on intensity change.
 """
 import glob
 from multiprocessing import Pool
@@ -13,68 +13,32 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.cm import ScalarMappable
+from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.legend_handler import HandlerPatch
 from matplotlib.lines import Line2D
 from matplotlib.patches import Circle, Wedge
-from matplotlib.ticker import FuncFormatter
 from scipy.stats import mannwhitneyu
 from shear_multi import mp_running, init_worker
+from statsmodels.stats.multitest import multipletests
 
 
 class HandlerHalfCircle(HandlerPatch):
-    def create_artists(self, legend, orig_handle,
-                       xdescent, ydescent, width, height, fontsize, trans):
-
+    def create_artists(self, legend, orig_handle, xdescent, ydescent, width, height, fontsize, trans):
         center = (width / 2 - xdescent, height / 2 - ydescent)
         radius = min(width, height) / 1.45
-
-        # Left half (red)
-        left = Wedge(center, radius, 90, 270,
-                     facecolor='red', edgecolor='black', lw=1,
-                     transform=trans)
-
-        # Right half (blue)
-        right = Wedge(center, radius, -90, 90,
-                      facecolor='blue', edgecolor='black', lw=1,
-                      transform=trans)
-
+        left = Wedge(center, radius, 90, 270, facecolor='red', edgecolor='black', lw=1, transform=trans)
+        right = Wedge(center, radius, -90, 90, facecolor='blue', edgecolor='black', lw=1, transform=trans)
         return [left, right]
 
 
-def label_every_20(x, pos):
-    """
-    Function for creating labels every 20 points.
-    :param x: Tick marks
-    :return: Tick labels
-    """
-    return f"{int(x)}" if x % 40 == 0 else ''
-
-
 def group_func(data: list, group_labels: list):
-    """
-    Group pixel data by rounded intensity change bins.
-
-    Converts raw pixel counts to percentage of domain (1024x1024).
-    Returns:
-        grouped_data : list of lists (pixel % per bin)
-        grouped_labels : list of lists (bin labels)
-    """
-    df = pd.DataFrame({
-        "label": group_labels,
-        "data": data
-    }).dropna()
-
-    # Convert to % once (vectorized)
+    df = pd.DataFrame({"label": group_labels, "data": data}).dropna()
     df["data"] = (df["data"] / (1024 * 1024)) * 100
-
     grouped = df.groupby("label")["data"].apply(list).sort_index()
-
     return grouped.tolist(), [[k] * len(v) for k, v in grouped.items()]
 
 
-
 def adjacent_values(sorted_array, q1, q3):
-    """Calculate adjacent values for whiskers in box/violin plots."""
     iqr = q3 - q1
     upper_adj = q3 + 1.5 * iqr
     lower_adj = q1 - 1.5 * iqr
@@ -82,555 +46,282 @@ def adjacent_values(sorted_array, q1, q3):
     lower = min([x for x in sorted_array if x >= lower_adj], default=q1)
     return lower, upper
 
-def compute_pval_grid(data: list) -> np.ndarray:
-    """
-    Compute symmetric Mann-Whitney U p-value matrix.
-    Only computes upper triangle and mirrors.
-    """
+
+def compute_pval_rbc_grid(data: list) -> tuple[np.ndarray, np.ndarray]:
     n = len(data)
     p_grid = np.full((n, n), np.nan)
+    rbc_grid = np.full((n, n), np.nan)
+    p_values_list, rbc_list, indices = [], [], []
 
     for i in range(n):
-        for j in range(i, n):
-            _, p = mannwhitneyu(data[i], data[j], alternative='two-sided')
-            p_grid[i, j] = p
-            p_grid[j, i] = p
+        for j in range(i + 1, n):
+            if len(data[i]) == 0 or len(data[j]) == 0:
+                continue
+            try:
+                u_stat, p = mannwhitneyu(data[i], data[j], alternative='two-sided')
+                p_values_list.append(p)
+                indices.append((i, j))
+                n1, n2 = len(data[i]), len(data[j])
+                rbc = abs(1 - (2 * u_stat) / (n1 * n2))
+                rbc_list.append(rbc)
+            except ValueError:
+                pass
 
-    return p_grid
+    if len(p_values_list) > 0:
+        reject_null, corrected_p_values, _, _ = multipletests(pvals=p_values_list, alpha=0.05, method='fdr_bh')
+        for (i, j), p_corr, rbc in zip(indices, corrected_p_values, rbc_list):
+            p_grid[i, j] = p_grid[j, i] = p_corr
+            rbc_grid[i, j] = rbc_grid[j, i] = rbc
+
+    return p_grid, rbc_grid
 
 
 def clean_func(list1: list, list2: list) -> list:
-    """
-    Function for removing None values from list
-    :param list1: First list to be cleaned
-    :param list2: Second list to be cleaned
-    :return: The two cleaned lists
-    """
     none_indices = ([i for i, v in enumerate(list1) if v is None] +
                     [i for i, v in enumerate(list2) if v is None])
-
-    # Remove None values
-    cleaned_list1 = [v for i, v in enumerate(list1) if i not in none_indices]
-    cleaned_list2 = [v for i, v in enumerate(list2) if i not in none_indices]
-    return cleaned_list1, cleaned_list2
+    return [v for i, v in enumerate(list1) if i not in none_indices], [v for i, v in enumerate(list2) if
+                                                                       i not in none_indices]
 
 
-# ======================== Config ========================
-cut_off = 0.02
-ri_thresh, rw_thresh = 30, -20
-pix_threshold = min_wind_threshold = -np.inf
-max_wind_threshold = np.inf
-online, save_state = True, False
-base_dir = '/rstor/jmayhall/' if online else '//uahdata/rstor/'
+def split_basin_intensity(results: dict):
+    results_al = {'wind_change': {f'{h:+}': {'pixel': [], 'count': []} for h in [-24, 24]}, 'id_list': []}
+    results_ep = {'wind_change': {f'{h:+}': {'pixel': [], 'count': []} for h in [-24, 24]}, 'id_list': []}
 
-paths = {
-    'latlon': f'{base_dir}cataloging/nc_process/geojson_transform/completed_arrays/latlon_arrs/*.npz',
-    'hurdat': f'{base_dir}cataloging/hurdat_update.txt',
-    'model': f'{base_dir}Model_Training_Code/cnn_creation',
-    'c8': f'{base_dir}cataloging/nc_process/geojson_transform/completed_arrays/C08_scaled/*',
-    'c13': f'{base_dir}cataloging/nc_process/geojson_transform/completed_arrays/C13_scaled/*',
-    'ships': f'{base_dir}cataloging/nc_process/violin_plots/shear_process_all/ships_interp.txt'
-}
+    for idx, storm_id in enumerate(results['id_list']):
+        target = results_al if 'AL' in storm_id else results_ep if 'EP' in storm_id else None
+        if target:
+            target['id_list'].append(storm_id)
+            for h in target['wind_change']:
+                target['wind_change'][h]['pixel'].append(results['wind_change'][h]['pixel'][idx])
+                target['wind_change'][h]['count'].append(results['wind_change'][h]['count'][idx])
+    return results_al, results_ep
 
-# ===================== Load Data ========================
-hurdat_df = pd.read_csv(paths['hurdat'], sep='\t')
-latlon_arrays = pd.DataFrame({'Name': glob.glob(paths['latlon'])})
-c8_scaled = pd.DataFrame({'Name': glob.glob(paths['c8'])})
-c13_scaled = glob.glob(paths['c13'])
-path_len = len(paths['c13']) - 1
-wind_dict = pd.read_csv(paths['ships'], sep='\t', index_col=0)
-norm = mpl.colors.Normalize(vmin=0.049, vmax=1)
-sm = ScalarMappable(cmap='gist_ncar', norm=norm)
-sm.set_array([])
 
-# =================== Parallel Args =======================
-needed_args = [{
-    'i': i,
-    'file': file,
-    'path_len': path_len,
-    'paths': paths,
-    'c8_scaled': c8_scaled
-} for i, file in enumerate(c13_scaled)]
+def clean_all_intensity(results: dict) -> dict:
+    for h in results['wind_change']:
+        results['wind_change'][h]['pixel'], results['wind_change'][h]['count'] = clean_func(
+            results['wind_change'][h]['pixel'], results['wind_change'][h]['count']
+        )
+    return results
 
-# ================== Collect Results =======================
-results = {
-    'diurnal_pixel': [], 'diurnal_count': [],
-    'intensity_pixel': [], 'intensity_count': [],
-    'wind_change': {f'{h:+}': {'pixel': [], 'count': []} for h in [-24, 24]},
-    'id_list': []
-}
 
-with Pool(12, initializer=init_worker) as pool:
-    for result in pool.map(mp_running, needed_args):
-        if result is None:
-            continue
+# ================= Single-Axis Plotting Functions =================
 
-        wind_change_counts, pixels, atcf_id = result
-
-        for h, wind_change in zip([-24, 24], wind_change_counts):
-            if wind_change is not None:
-                rounded_wind = int(np.round(wind_change / 20) * 20)
-            else:
-                rounded_wind = None
-            key = f'{h:+}'  # "+6", "-24", etc.
-            results['wind_change'][key]['pixel'].append(pixels)
-            results['wind_change'][key]['count'].append(rounded_wind)
-        results['id_list'].append(atcf_id)
-
-# Initialize new dictionaries for AL and EP
-results_AL = {'wind_change': {f'{h:+}': {'pixel': [], 'count': []} for h in [-24, 24]}, 'id_list': []}
-
-results_EP = {'wind_change': {f'{h:+}': {'pixel': [], 'count': []} for h in [-24, 24]}, 'id_list': []}
-
-for idx, storm_id in enumerate(results['id_list']):
-    if 'AL' in storm_id:
-        results_AL['id_list'].append(storm_id)
-        for h in results_AL['wind_change']:
-            results_AL['wind_change'][h]['pixel'].append(results['wind_change'][h]['pixel'][idx])
-            results_AL['wind_change'][h]['count'].append(results['wind_change'][h]['count'][idx])
-    elif 'EP' in storm_id:
-        results_EP['id_list'].append(storm_id)
-        for h in results_EP['wind_change']:
-            results_EP['wind_change'][h]['pixel'].append(results['wind_change'][h]['pixel'][idx])
-            results_EP['wind_change'][h]['count'].append(results['wind_change'][h]['count'][idx])
-for h in results_AL['wind_change']:
-    results_AL['wind_change'][h]['pixel'], results_AL['wind_change'][h]['count'] = (
-        clean_func(results_AL['wind_change'][h]['pixel'], results_AL['wind_change'][h]['count']))
-for h in results['wind_change']:
-    results_EP['wind_change'][h]['pixel'], results_EP['wind_change'][h]['count'] = (
-        clean_func(results_EP['wind_change'][h]['pixel'], results_EP['wind_change'][h]['count']))
-
-# =========== Plot: Wind Change (Past) ============
-past_hours = [-24]
-data_list = ([group_func(results_AL['wind_change'][f'{h:+}']['pixel'],
-                         results_AL['wind_change'][f'{h:+}']['count'])[0] for h in past_hours] +
-             [group_func(results_EP['wind_change'][f'{h:+}']['pixel'],
-                         results_EP['wind_change'][f'{h:+}']['count'])[0] for h in past_hours])
-x_labels = ([group_func(results_AL['wind_change'][f'{h:+}']['pixel'],
-                        results_AL['wind_change'][f'{h:+}']['count'])[1] for h in past_hours] +
-            [group_func(results_EP['wind_change'][f'{h:+}']['pixel'],
-                        results_EP['wind_change'][f'{h:+}']['count'])[1] for h in past_hours])
-labels_list = [f"{h}hr" for h in past_hours] + [f"{h}hr" for h in past_hours]
-
-fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-fig.suptitle('CB Occurrences vs Previous TC Intensity Change',
-             fontsize=24, y=1)
-fig.supxlabel(r'TC Wind Speed Change ($\frac{{dv}}{{dt}}$)', fontsize=24)
-fig.supylabel('Percentage of Pixels with CBs', fontsize=24)
-for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, labels_list, x_labels)):
-    labels = np.unique(np.concatenate([np.array(sublist) for sublist in labels]))
-    ax.tick_params(axis='both', labelsize=18)
-    parts = ax.violinplot(data, positions=labels, showmeans=False, showmedians=False, showextrema=False, widths=8)
+def plot_violin_single(ax, data, labels, title, xlims, xticks, y_label=None):
+    unique_labels = np.unique(np.concatenate([np.array(sublist) for sublist in labels]))
+    parts = ax.violinplot(data, positions=unique_labels, showmeans=False, showmedians=False, showextrema=False,
+                          widths=8)
 
     for pc in parts['bodies']:
         pc.set_facecolor('#FFA500')
         pc.set_edgecolor('black')
         pc.set_alpha(1)
 
-    # Compute quartiles and whiskers for each group manually
     quartile1, medians, quartile3, whiskers_min, whiskers_max = [], [], [], [], []
-
     for group in data:
         group = np.sort(group)
         q1, med, q3 = np.percentile(group, [25, 50, 75])
-        whisk_min, whisk_max = adjacent_values(group, q1, q3)
-        quartile1.append(q1)
-        medians.append(med)
+        w_min, w_max = adjacent_values(group, q1, q3)
+        quartile1.append(q1);
+        medians.append(med);
         quartile3.append(q3)
-        whiskers_min.append(whisk_min)
-        whiskers_max.append(whisk_max)
+        whiskers_min.append(w_min);
+        whiskers_max.append(w_max)
 
-    inds = labels
-    ax.scatter(inds, medians, marker='o', color='blue', s=100, zorder=3)
-    ax.vlines(inds, quartile1, quartile3, color='k', linestyle='-', lw=5)
-    ax.vlines(inds, whiskers_min, whiskers_max, color='k', linestyle='-', lw=1)
-    ax.set_ylim((0, 60))
-    if '6' in label:
-        ax.set_xlim((-65, 45))
-        ax.set_xticks(range(-60, 41, 20))
-    elif '12' in label:
-        ax.set_xlim((-105, 65))
-        ax.set_xticks(range(-100, 61, 20))
-    elif '18' in label:
-        ax.set_xlim((-85, 85))
-        ax.set_xticks(range(-80, 81, 20))
-    elif '24' in label:
-        ax.set_xlim((-85, 85))
-        ax.set_xticks(range(-80, 81, 20))
-    ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
-    plt.setp(ax.get_xticklabels())
-    # Ensure there's enough space at the top
-    ymin = min([np.min(d) for d in data])
-    ymax = max([np.max(d) for d in data])
+    ax.scatter(unique_labels, medians, marker='o', color='blue', s=100, zorder=3)
+    ax.vlines(unique_labels, quartile1, quartile3, color='k', linestyle='-', lw=5)
+    ax.vlines(unique_labels, whiskers_min, whiskers_max, color='k', linestyle='-', lw=1)
+
+    ymin, ymax = min([np.min(d) for d in data]), max([np.max(d) for d in data])
     y_offset = 0.05 * (ymax - ymin)
-    fig_ylim_top = 100
-
-    # Now safely add text without going above the y-limit
     for i, d in enumerate(data):
         offset = y_offset if i % 2 == 0 else -1 * y_offset
-        text_y = min(max(d) + offset, fig_ylim_top - 0.05 * (ymax - ymin))  # small buffer
-        ax.text(labels[i], text_y, f'{len(d)}', ha='center', fontsize=20, fontweight='bold', rotation=90, va='center',
+        text_y = min(max(d) + offset, 100 - 0.05 * (ymax - ymin))
+        ax.text(unique_labels[i], text_y, f'{len(d)}', ha='center', fontsize=18, fontweight='bold',
+                rotation=90, va='center',
                 path_effects=[path_effects.Stroke(linewidth=2, foreground='white'), path_effects.Normal()])
+
+    ax.set_ylim((0, 60))
+    ax.set_xlim(xlims)
+    ax.set_xticks(xticks)
+    ax.tick_params(axis='both', labelsize=16)
     ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
-    ax.axvline(x=-20, color='blue', linestyle='--', lw=2, label='RW Transition')
-    ax.axvline(x=30, color='magenta', linestyle='--', lw=2, label='RI Transition')
-    if z == 0:
-        ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours\n' + rf'Atlantic, 20kt ($24h^{{-1}}$)', fontsize=20)
-    else:
-        ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours\n' + rf'Eastern Pacific, 20kt ($24h^{{-1}}$)', fontsize=20)
 
-    # Add legend after the lines are drawn
-fig.subplots_adjust(
-    left=0.12,  # space for ylabel
-    right=0.92,  # space for legend or vertical colorbar
-    bottom=0.25,  # space for supxlabel
-    top=0.85,  # space for suptitle
-    hspace=0.4,  # vertical spacing between rows
-    wspace=0.3  # horizontal spacing between columns
-)
-handles, labels = ax.get_legend_handles_labels()
-legend = fig.legend(handles, labels, loc='lower right', fontsize=15)
-legend.set_alpha(0)
-plt.savefig('prev_intensity_change_ALEP.png')
-plt.close()
+    line_rw = ax.axvline(x=-20, color='blue', linestyle='--', lw=2, label='RW Transition')
+    line_ri = ax.axvline(x=30, color='magenta', linestyle='--', lw=2, label='RI Transition')
 
-fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-fig.suptitle('Previous TC Intensity Change Mann-Whitney P-Values', fontsize=24, y=1)
-fig.supxlabel(r'TC Wind Speed Change ($\frac{dv}{dt}$)', fontsize=24, y=0.07)
-fig.supylabel(r'TC Wind Speed Change ($\frac{dv}{dt}$)', fontsize=24, x=0.05)
+    ax.set_title(title, fontsize=20)
+    if y_label: ax.set_ylabel(y_label, fontsize=20)
 
-# Loop through each subplot
-for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, labels_list, x_labels)):
-    labels = np.unique(np.concatenate([np.array(sublist) for sublist in labels]))
+    return [line_rw, line_ri]
 
-    # Compute p-value matrix
-    p_grid = compute_pval_grid(data)
-    # Create contourf plot
-    x, y = np.meshgrid(labels, labels)
-    z_pgrid = p_grid
-    # Flatten everything
-    x_flat = x.ravel()
-    y_flat = y.ravel()
-    z_flat = z_pgrid.ravel()
-    mask = z_flat < 0.05
-    x_masked = x_flat[mask]
-    y_masked = y_flat[mask]
-    # Plot only black dots for z < 0.05
-    # --- classification masks ---
+
+def plot_pvals_single(ax, data, labels, title, xlims, xticks, y_label=None):
+    unique_labels = np.unique(np.concatenate([np.array(sublist) for sublist in labels]))
+    p_grid, rbc_grid = compute_pval_rbc_grid(data)
+    x, y = np.meshgrid(unique_labels, unique_labels)
+    mask = (p_grid.ravel() < 0.05)
+    x_masked, y_masked = x.ravel()[mask], y.ravel()[mask]
+
     high_mask = (x_masked > 30) | (y_masked > 30)
     low_mask = (x_masked < -20) | (y_masked < -20)
-
     both_mask = high_mask & low_mask
     red_mask = high_mask & ~low_mask
     blue_mask = low_mask & ~high_mask
     black_mask = ~(high_mask | low_mask)
 
-    # --- normal markers ---
     ax.scatter(x_masked[red_mask], y_masked[red_mask], c='red', s=150, label='> 30 kt bin')
     ax.scatter(x_masked[blue_mask], y_masked[blue_mask], c='blue', s=150, label='< -20 kt bin')
     ax.scatter(x_masked[black_mask], y_masked[black_mask], c='black', s=150, label='Other (p < 0.05)')
 
     for x_val, y_val in zip(x_masked[both_mask], y_masked[both_mask]):
-        marker_size = np.sqrt(150)
+        ax.plot(x_val, y_val, marker='o', markersize=np.sqrt(150), markerfacecolor='red',
+                markerfacecoloralt='blue', markeredgecolor='black', markeredgewidth=1,
+                fillstyle='left', linestyle='None', zorder=3)
 
-        ax.plot(
-            x_val, y_val,
-            marker='o',
-            markersize=marker_size,
-            markerfacecolor='red',  # left half
-            markerfacecoloralt='blue',  # right half
-            markeredgecolor='black',
-            markeredgewidth=1,
-            fillstyle='left',
-            linestyle='None',
-            zorder=3
-        )
-    ax.set_xticklabels(labels, fontsize=18)
-    ax.set_yticklabels(labels, fontsize=18)
-    if '6' in label:
-        ax.set_xlim((-65, 45))
-        ax.set_ylim((-65, 45))
-        tick_marks = range(-60, 41, 20)
-    elif '12' in label:
-        ax.set_xlim((-105, 65))
-        ax.set_ylim((-105, 65))
-        tick_marks = range(-100, 61, 20)
-    elif '18' in label:
-        ax.set_xlim((-85, 85))
-        ax.set_ylim((-85, 85))
-        tick_marks = range(-80, 81, 20)
-    elif '24' in label:
-        ax.set_xlim((-85, 85))
-        ax.set_ylim((-85, 85))
-        tick_marks = range(-80, 81, 20)
-    ax.set_xticks(tick_marks)
-    ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
-    ax.set_yticks(tick_marks)
-    plt.setp(ax.get_xticklabels())
-    ax.yaxis.set_major_formatter(FuncFormatter(label_every_20))
-    plt.setp(ax.get_yticklabels())
-    ax.set_title(f'{label}', fontsize=20)
+    ax.set_xlim(xlims)
+    ax.set_ylim(xlims)
+    ax.set_xticks(xticks)
+    ax.set_yticks(xticks)
+    ax.tick_params(axis='both', labelsize=16)
     ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
-    if z == 0:
-        ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours\n' + rf'Atlantic, 20kt ($24h^{{-1}}$)', fontsize=20)
-    else:
-        ax.set_title(f'Intensity Change over the Previous {label[1:-2]} Hours\n' + rf'Eastern Pacific, 20kt ($24h^{{-1}}$)', fontsize=20)
+    ax.set_title(title, fontsize=20)
+    if y_label: ax.set_ylabel(y_label, fontsize=20)
 
-# Add colorbar
-fig.subplots_adjust(
-    left=0.12,  # space for ylabel
-    right=0.92,  # space for legend or vertical colorbar
-    bottom=0.25,  # space for supxlabel
-    top=0.85,  # space for suptitle
-    hspace=0.4,  # vertical spacing between rows
-    wspace=0.3  # horizontal spacing between columns
-)
-half_circle = Circle((0,0), 1)
 
-legend_handles = [
-    Line2D([0],[0], marker='o', color='w', markerfacecolor='red',
-           markersize=18, label='p<0.05 (RI)'),
-    Line2D([0],[0], marker='o', color='w', markerfacecolor='blue',
-           markersize=18, label='p<0.05 (RW)'),
-    half_circle,
-    Line2D([0],[0], marker='o', color='w', markerfacecolor='black',
-           markersize=18, label='Other (p < 0.05)')
-]
+def plot_rbc_single(ax, data, labels, title, xlims, xticks, y_label=None):
+    base = plt.get_cmap("coolwarm")
+    cmap = LinearSegmentedColormap.from_list("coolwarm_trimmed", np.vstack([
+        base(np.linspace(0.00, 0.30, 128)), base(np.linspace(0.70, 1.00, 128))
+    ]))
 
-legend_labels = [
-    'p<0.05 (RI)',
-    'p<0.05 (RW)',
-    'p<0.05 (RI & RW)',
-    'p<0.05'
-]
+    unique_labels = np.unique(np.concatenate([np.array(sublist) for sublist in labels]))
+    p_grid, rbc_grid = compute_pval_rbc_grid(data)
+    x, y = np.meshgrid(unique_labels, unique_labels)
+    mask = (p_grid.ravel() < 0.05)
+    x_masked, y_masked, rbc_masked = x.ravel()[mask], y.ravel()[mask], rbc_grid.ravel()[mask]
 
-fig.legend(
-    legend_handles,
-    legend_labels,
-    handler_map={half_circle: HandlerHalfCircle()},
-    loc='lower right',
-    fontsize=16
-)
-# Adjust spacing to make room for colorbar at the bottom
+    for x_val, y_val, rbc_val in zip(x_masked, y_masked, rbc_masked):
+        color = cmap(rbc_val)
+        ax.text(x_val, y_val, f"{rbc_val * 100:.0f}", color=color, ha='center', va='center', fontweight='bold',
+                fontsize=18)
 
-# Create a new axis for the horizontal colorbar that spans the full width
-plt.savefig('prev_intensity_change_ALEP_mannwhitney.png')
-plt.close()
-
-# =========== Plot: Wind Change (Future) ==========
-future_hours = [24]
-data_list = ([group_func(results_AL['wind_change'][f'{h:+}']['pixel'],
-                         results_AL['wind_change'][f'{h:+}']['count'])[0] for h in future_hours] +
-             [group_func(results_EP['wind_change'][f'{h:+}']['pixel'],
-                         results_EP['wind_change'][f'{h:+}']['count'])[0] for h in future_hours])
-x_labels = ([group_func(results_AL['wind_change'][f'{h:+}']['pixel'],
-                        results_AL['wind_change'][f'{h:+}']['count'])[1] for h in future_hours] +
-            [group_func(results_EP['wind_change'][f'{h:+}']['pixel'],
-                        results_EP['wind_change'][f'{h:+}']['count'])[1] for h in future_hours])
-labels_list = [f"{h}hr" for h in future_hours] + [f"{h}hr" for h in future_hours]
-
-fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-fig.suptitle('CB Occurrences vs Future TC Intensity Change',
-             fontsize=24, y=1)
-fig.supxlabel(r'TC Wind Speed Change ($\frac{{dv}}{{dt}}$)', fontsize=24)
-fig.supylabel('Percentage of Pixels with CBs', fontsize=24)
-for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, labels_list, x_labels)):
-    labels = np.unique(np.concatenate([np.array(sublist) for sublist in labels]))
-    ax.tick_params(axis='both', labelsize=18)
-    parts = ax.violinplot(data, positions=labels, showmeans=False, showmedians=False, showextrema=False, widths=8)
-
-    for pc in parts['bodies']:
-        pc.set_facecolor('#FFA500')
-        pc.set_edgecolor('black')
-        pc.set_alpha(1)
-
-    # Compute quartiles and whiskers for each group manually
-    quartile1, medians, quartile3, whiskers_min, whiskers_max = [], [], [], [], []
-
-    for group in data:
-        group = np.sort(group)
-        q1, med, q3 = np.percentile(group, [25, 50, 75])
-        whisk_min, whisk_max = adjacent_values(group, q1, q3)
-        quartile1.append(q1)
-        medians.append(med)
-        quartile3.append(q3)
-        whiskers_min.append(whisk_min)
-        whiskers_max.append(whisk_max)
-
-    inds = labels
-    ax.scatter(inds, medians, marker='o', color='blue', s=100, zorder=3)
-    ax.vlines(inds, quartile1, quartile3, color='k', linestyle='-', lw=5)
-    ax.vlines(inds, whiskers_min, whiskers_max, color='k', linestyle='-', lw=1)
-    ax.set_ylim((0, 60))
-    if '6' in label:
-        ax.set_xlim((-65, 45))
-        ax.set_xticks(range(-60, 41, 20))
-    elif '12' in label:
-        ax.set_xlim((-105, 65))
-        ax.set_xticks(range(-100, 61, 20))
-    elif '18' in label:
-        ax.set_xlim((-105, 85))
-        ax.set_xticks(range(-100, 81, 20))
-    elif '24' in label:
-        ax.set_xlim((-105, 85))
-        ax.set_xticks(range(-100, 81, 20))
-    ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
-    plt.setp(ax.get_xticklabels())
-    # Ensure there's enough space at the top
-    ymin = min([np.min(d) for d in data])
-    ymax = max([np.max(d) for d in data])
-    y_offset = 0.05 * (ymax - ymin)
-    fig_ylim_top = 100
-
-    # Now safely add text without going above the y-limit
-    for i, d in enumerate(data):
-        offset = y_offset if i % 2 == 0 else -1 * y_offset
-        text_y = min(max(d) + offset, fig_ylim_top - 0.05 * (ymax - ymin))  # small buffer
-        ax.text(labels[i], text_y, f'{len(d)}', ha='center', fontsize=20, fontweight='bold', rotation=90, va='center',
-                path_effects=[path_effects.Stroke(linewidth=2, foreground='white'), path_effects.Normal()])
+    ax.set_xlim(xlims)
+    ax.set_ylim(xlims)
+    ax.set_xticks(xticks)
+    ax.set_yticks(xticks)
+    ax.tick_params(axis='both', labelsize=16)
     ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
-    ax.axvline(x=-20, color='blue', linestyle='--', lw=2, label='RW Transition')
-    ax.axvline(x=30, color='magenta', linestyle='--', lw=2, label='RI Transition')
-    if z == 0:
-        ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours\n' + rf'Atlantic, 20kt ($24h^{{-1}}$)', fontsize=20)
-    else:
-        ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours\n' + rf'Eastern Pacific, 20kt ($24h^{{-1}}$)', fontsize=20)
+    ax.set_title(title, fontsize=20)
+    if y_label: ax.set_ylabel(y_label, fontsize=20)
 
-    # Add legend after the lines are drawn
-fig.subplots_adjust(
-    left=0.12,  # space for ylabel
-    right=0.92,  # space for legend or vertical colorbar
-    bottom=0.25,  # space for supxlabel
-    top=0.85,  # space for suptitle
-    hspace=0.4,  # vertical spacing between rows
-    wspace=0.3  # horizontal spacing between columns
-)
-handles, labels = ax.get_legend_handles_labels()
-legend = fig.legend(handles, labels, loc='lower right', fontsize=15)
-legend.set_alpha(0)
-plt.savefig('future_intensity_change_ALEP.png')
-plt.close()
 
-fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-fig.suptitle('Future TC Intensity Change Mann-Whitney P-Values', fontsize=24, y=1)
-fig.supxlabel(r'TC Wind Speed Change ($\frac{dv}{dt}$)', fontsize=24, y=0.12)
-fig.supylabel(r'TC Wind Speed Change ($\frac{dv}{dt}$)', fontsize=24, x=0.05)
+if __name__ == '__main__':
+    # ======================== Config ========================
+    cut_off = 0.02
+    ri_thresh, rw_thresh = 30, -20
+    online, save_state = True, False
+    base_dir = '/rstor/jmayhall/' if online else '//uahdata/rstor/'
 
-# Loop through each subplot
-for z, (ax, data, label, labels) in enumerate(zip(axes.flatten(), data_list, labels_list, x_labels)):
-    labels = np.unique(np.concatenate([np.array(sublist) for sublist in labels]))
+    paths = {
+        'latlon': f'{base_dir}cataloging/nc_process/geojson_transform/completed_arrays/latlon_arrs/*.npz',
+        'hurdat': f'{base_dir}cataloging/hurdat_update.txt',
+        'model': f'{base_dir}Model_Training_Code/cnn_creation',
+        'c8': f'{base_dir}cataloging/nc_process/geojson_transform/completed_arrays/C08_scaled/*',
+        'c13': f'{base_dir}cataloging/nc_process/geojson_transform/completed_arrays/C13_scaled/*',
+        'ships': f'{base_dir}cataloging/nc_process/violin_plots/shear_process_all/ships_interp.txt'
+    }
 
-    # Compute p-value matrix
-    p_grid = compute_pval_grid(data)
-    # Create contourf plot
-    x, y = np.meshgrid(labels, labels)
-    z_pgrid = p_grid
-    # Flatten everything
-    x_flat = x.ravel()
-    y_flat = y.ravel()
-    z_flat = z_pgrid.ravel()
-    mask = z_flat < 0.05
-    x_masked = x_flat[mask]
-    y_masked = y_flat[mask]
-    # Plot only black dots for z < 0.05
-    # --- classification masks ---
-    high_mask = (x_masked > 30) | (y_masked > 30)
-    low_mask = (x_masked < -20) | (y_masked < -20)
+    # ===================== Load Data ========================
+    hurdat_df = pd.read_csv(paths['hurdat'], sep='\t')
+    latlon_arrays = pd.DataFrame({'Name': glob.glob(paths['latlon'])})
+    c8_scaled = pd.DataFrame({'Name': glob.glob(paths['c8'])})
+    c13_scaled = glob.glob(paths['c13'])
+    path_len = len(paths['c13']) - 1
+    wind_dict = pd.read_csv(paths['ships'], sep='\t', index_col=0)
 
-    both_mask = high_mask & low_mask
-    red_mask = high_mask & ~low_mask
-    blue_mask = low_mask & ~high_mask
-    black_mask = ~(high_mask | low_mask)
+    needed_args = [{
+        'i': i, 'file': file, 'path_len': path_len, 'paths': paths, 'c8_scaled': c8_scaled
+    } for i, file in enumerate(c13_scaled)]
 
-    # --- normal markers ---
-    ax.scatter(x_masked[red_mask], y_masked[red_mask], c='red', s=150, label='> 30 kt bin')
-    ax.scatter(x_masked[blue_mask], y_masked[blue_mask], c='blue', s=150, label='< -20 kt bin')
-    ax.scatter(x_masked[black_mask], y_masked[black_mask], c='black', s=150, label='Other (p < 0.05)')
+    results = {
+        'wind_change': {f'{h:+}': {'pixel': [], 'count': []} for h in [-24, 24]},
+        'id_list': []
+    }
 
-    for x_val, y_val in zip(x_masked[both_mask], y_masked[both_mask]):
-        marker_size = np.sqrt(150)
+    with Pool(12, initializer=init_worker) as pool:
+        for result in pool.map(mp_running, needed_args):
+            if result is None:
+                continue
+            wind_change_counts, pixels, atcf_id = result
+            for h, wind_change in zip([-24, 24], wind_change_counts):
+                rounded_wind = int(np.round(wind_change / 20) * 20) if wind_change is not None else None
+                key = f'{h:+}'
+                results['wind_change'][key]['pixel'].append(pixels)
+                results['wind_change'][key]['count'].append(rounded_wind)
+            results['id_list'].append(atcf_id)
 
-        ax.plot(
-            x_val, y_val,
-            marker='o',
-            markersize=marker_size,
-            markerfacecolor='red',  # left half
-            markerfacecoloralt='blue',  # right half
-            markeredgecolor='black',
-            markeredgewidth=1,
-            fillstyle='left',
-            linestyle='None',
-            zorder=3
-        )
-    ax.set_xticklabels(labels, fontsize=18)
-    ax.set_yticklabels(labels, fontsize=18)
-    if '6' in label:
-        ax.set_xlim((-65, 45))
-        ax.set_ylim((-65, 45))
-        tick_marks = range(-60, 41, 20)
-    elif '12' in label:
-        ax.set_xlim((-105, 65))
-        ax.set_ylim((-105, 65))
-        tick_marks = range(-100, 61, 20)
-    elif '18' in label:
-        ax.set_xlim((-105, 85))
-        ax.set_ylim((-105, 85))
-        tick_marks = range(-100, 81, 20)
-    elif '24' in label:
-        ax.set_xlim((-105, 85))
-        ax.set_ylim((-105, 85))
-        tick_marks = range(-100, 81, 20)
-    ax.set_xticks(tick_marks)
-    ax.xaxis.set_major_formatter(FuncFormatter(label_every_20))
-    ax.set_yticks(tick_marks)
-    plt.setp(ax.get_xticklabels())
-    ax.yaxis.set_major_formatter(FuncFormatter(label_every_20))
-    plt.setp(ax.get_yticklabels())
-    ax.set_title(f'{label}', fontsize=20)
-    ax.grid(True, color='black', linestyle='--', linewidth=1.0, alpha=1)
-    if z == 0:
-        ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours\n' + rf'Atlantic, 20kt ($24h^{{-1}}$)', fontsize=20)
-    else:
-        ax.set_title(f'Intensity Change over the Next {label[:-2]} Hours\n' + rf'Eastern Pacific, 20kt ($24h^{{-1}}$)', fontsize=20)
+    # Split & Clean
+    results_al, results_ep = split_basin_intensity(results)
+    results_al = clean_all_intensity(results_al)
+    results_ep = clean_all_intensity(results_ep)
 
-# Add colorbar
-# Adjust spacing to make room for colorbar at the bottom
-fig.subplots_adjust(
-    left=0.12,  # space for ylabel
-    right=0.92,  # space for legend or vertical colorbar
-    bottom=0.25,  # space for supxlabel
-    top=0.85,  # space for suptitle
-    hspace=0.4,  # vertical spacing between rows
-    wspace=0.3  # horizontal spacing between columns
-)
-half_circle = Circle((0,0), 1)
+    # ================== Generate Plots =======================
+    for h, main_title, x_lims, x_ticks, out_file in [
+        ('-24', r'Previous TC Intensity Change, 20kt (20h)$^{-1}$', (-85, 85), range(-80, 81, 20), 'prev_intensity_combined.png'),
+        ('+24', r'Future TC Intensity Change, 20kt (20h)$^{-1}$', (-105, 85), range(-100, 81, 20), 'future_intensity_combined.png')
+    ]:
+        data_al, labels_al = group_func(results_al['wind_change'][h]['pixel'], results_al['wind_change'][h]['count'])
+        data_ep, labels_ep = group_func(results_ep['wind_change'][h]['pixel'], results_ep['wind_change'][h]['count'])
 
-legend_handles = [
-    Line2D([0],[0], marker='o', color='w', markerfacecolor='red',
-           markersize=18, label='p<0.05 (RI)'),
-    Line2D([0],[0], marker='o', color='w', markerfacecolor='blue',
-           markersize=18, label='p<0.05 (RW)'),
-    half_circle,
-    Line2D([0],[0], marker='o', color='w', markerfacecolor='black',
-           markersize=18, label='Other (p < 0.05)')
-]
+        fig, axes = plt.subplots(2, 3, figsize=(28, 16), sharex=True)
+        fig.suptitle(f'CB Occurrences vs {main_title}', fontsize=32)
 
-legend_labels = [
-    'p<0.05 (RI)',
-    'p<0.05 (RW)',
-    'p<0.05 (RI & RW)',
-    'p<0.05'
-]
+        # Labels for the axes
+        ylab_violin = 'Percentage of Pixels with CBs'
+        ylab_stat = r'TC Wind Speed Change ($\frac{dv}{dt}$)'
+        xlab_all = r'TC Wind Speed Change ($\frac{dv}{dt}$)'
 
-fig.legend(
-    legend_handles,
-    legend_labels,
-    handler_map={half_circle: HandlerHalfCircle()},
-    loc='lower right',
-    fontsize=16
-)
-# Adjust spacing to make room for colorbar at the bottom
+        # --- ROW 0: Atlantic (AL) ---
+        title_al = f'AL: {main_title.split(" ")[0]} 24 Hours'
+        violin_handles = plot_violin_single(axes[0, 0], data_al, labels_al, f'AL: Violin Plot', x_lims, x_ticks,
+                                            y_label=ylab_violin)
+        plot_pvals_single(axes[0, 1], data_al, labels_al, f'AL: Mann-Whitney P-Values', x_lims, x_ticks,
+                          y_label=ylab_stat)
+        plot_rbc_single(axes[0, 2], data_al, labels_al, f'AL: Rank-Biserial Correlations', x_lims, x_ticks,
+                        y_label=ylab_stat)
 
-# Create a new axis for the horizontal colorbar that spans the full width
-plt.savefig('future_intensity_change_ALEP_mannwhitney.png')
-plt.close()
+        # --- ROW 1: East Pacific (EP) ---
+        title_ep = f'EP: {main_title.split(" ")[0]} 24 Hours'
+        plot_violin_single(axes[1, 0], data_ep, labels_ep, f'EP: Violin Plot', x_lims, x_ticks,
+                           y_label=ylab_violin)
+        plot_pvals_single(axes[1, 1], data_ep, labels_ep, f'EP: Mann-Whitney P-Values', x_lims, x_ticks,
+                          y_label=ylab_stat)
+        plot_rbc_single(axes[1, 2], data_ep, labels_ep, f'EP: Rank-Biserial Correlations', x_lims, x_ticks,
+                        y_label=ylab_stat)
+
+        # Add x-labels to the bottom row
+        for j in range(3):
+            axes[1, j].set_xlabel(xlab_all, fontsize=20)
+
+        # Adjust layout
+        plt.tight_layout(rect=[0, 0.03, 1, 0.93])
+
+        # Global Legends
+        half_circle = Circle((0, 0), 1)
+        pval_handles = [
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=14, label='p<0.05 (RI)'),
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='blue', markersize=14, label='p<0.05 (RW)'),
+            half_circle,
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='black', markersize=14, label='Other (p < 0.05)')
+        ]
+        pval_labels = ['p<0.05 (RI)', 'p<0.05 (RW)', 'p<0.05 (RI & RW)', 'p<0.05']
+
+        # Add legend to top center
+        fig.legend(handles=violin_handles + pval_handles,
+                   labels=['RW Transition', 'RI Transition'] + pval_labels,
+                   handler_map={half_circle: HandlerHalfCircle()},
+                   loc='upper center', ncol=6, fontsize=20, bbox_to_anchor=(0.5, 0.93))
+
+        plt.savefig(out_file, dpi=300, bbox_inches="tight")
+        plt.close('all')

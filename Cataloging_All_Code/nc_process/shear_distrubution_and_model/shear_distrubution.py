@@ -183,9 +183,10 @@ if __name__ == '__main__':
 
     ax.legend(
         handles=legend_lines,
-        frameon=False,
+        frameon=True,
         fontsize=12,
         loc="upper right",
+        framealpha=1
     )
 
     plt.tight_layout()
