@@ -268,8 +268,8 @@ if __name__ == '__main__':
 
     # ================== Generate Plots =======================
     for h, main_title, x_lims, x_ticks, out_file in [
-        ('-24', r'Previous TC Intensity Change, 20kt (20h)$^{-1}$', (-85, 85), range(-80, 81, 20), 'prev_intensity_combined.png'),
-        ('+24', r'Future TC Intensity Change, 20kt (20h)$^{-1}$', (-105, 85), range(-100, 81, 20), 'future_intensity_combined.png')
+        ('-24', r'TC Intensity Change over the Previous 24 Hours', (-85, 85), range(-80, 81, 20), 'prev_intensity_combined.png'),
+        ('+24', r'TC Intensity Change over the Next 24 Hours', (-105, 85), range(-100, 81, 20), 'future_intensity_combined.png')
     ]:
         data_al, labels_al = group_func(results_al['wind_change'][h]['pixel'], results_al['wind_change'][h]['count'])
         data_ep, labels_ep = group_func(results_ep['wind_change'][h]['pixel'], results_ep['wind_change'][h]['count'])
