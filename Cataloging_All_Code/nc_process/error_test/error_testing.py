@@ -124,18 +124,18 @@ def process_file(file_info):
 
 # ------------------- Metrics -------------------
 def compute_metrics(df: pd.DataFrame) -> pd.DataFrame:
-    """Compute Jaccard, Accuracy, POD, FAR from confusion matrix values."""
+    """Compute Jaccard, Accuracy, POD, F from confusion matrix values."""
     df['Jaccard'] = df['TP'] / (df['TP'] + df['FP'] + df['FN'])
     df['Accuracy'] = (df['TP'] + df['TN']) / df[['TP', 'TN', 'FP', 'FN']].sum(axis=1)
     df['POD'] = df['TP'] / (df['TP'] + df['FN'])
-    df['FAR'] = df['FP'] / (df['FP'] + df['TN'])
+    df['POFD'] = df['FP'] / (df['FP'] + df['TN'])
     return df.fillna(0)
 
 
 # ------------------- Main -------------------
 if __name__ == '__main__':
     # ------------------- Config -------------------
-    MODEL_PATH = '/rstor/jmayhall/Model_Training_Code/cnn_creation/model.keras'
+    MODEL_PATH = '/rhome/jmayhall/Model_Training_Code/cnn_creation/model.keras'
     GEOJSON_PATH = '/rstor/jmayhall/cataloging/nc_process/error_test/*.geojson'
     HURDAT_PATH = '/rstor/jmayhall/cataloging/hurdat_update_interp.txt'
     C8_PATH = '/rstor/jmayhall/cataloging/nc_process/geojson_transform/completed_arrays/C08_scaled/*'
@@ -192,14 +192,14 @@ if __name__ == '__main__':
         best = df.loc[df['Jaccard'].idxmax()]
         print(f"\nBest Cutoff {basin}: {best.Cutoff:.2f}, "
               f"Jaccard: {best.Jaccard:.3f}, Accuracy: {best.Accuracy:.3f}, "
-              f"POD: {best.POD:.3f}, FAR: {best.FAR:.3f}")
+              f"POD: {best.POD:.3f}, F: {best.POFD:.3f}")
 
         if PLOT_RESULTS:
             plt.plot(df['Cutoff'], df['Jaccard'], label=f'Jaccard ({basin})',
                      linestyle='-' if basin == 'AL' else 'dotted', color='blue')
             plt.plot(df['Cutoff'], df['POD'], label=f'POD ({basin})',
                      linestyle='-' if basin == 'AL' else 'dotted', color='orange')
-            plt.plot(df['Cutoff'], df['FAR'], label=f'FAR ({basin})',
+            plt.plot(df['Cutoff'], df['POFD'], label=f'POFD ({basin})',
                      linestyle='-' if basin == 'AL' else 'dotted', color='green')
 
     if PLOT_RESULTS:

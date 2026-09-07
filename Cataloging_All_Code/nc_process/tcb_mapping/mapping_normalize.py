@@ -12,6 +12,7 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
+from matplotlib.ticker import ScalarFormatter
 import numpy as np
 import pandas as pd
 from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
@@ -182,6 +183,13 @@ def plot_heatmaps(pixel_df: pd.DataFrame, total_df: pd.DataFrame, output_file: s
 
     cbar3 = fig.colorbar(im3, ax=axes[2], orientation="horizontal", shrink=0.55, aspect=30, pad=0.02)
     cbar3.set_label('Total Number of Pixel Samples', fontsize=12)
+
+    formatter = ScalarFormatter(useMathText=True)
+    formatter.set_powerlimits((0, 0))
+
+    cbar1.ax.xaxis.set_major_formatter(formatter)
+    cbar2.ax.xaxis.set_major_formatter(formatter)
+    cbar3.ax.xaxis.set_major_formatter(formatter)
 
     plt.savefig(output_file, dpi=300, bbox_inches="tight")
     plt.close()
